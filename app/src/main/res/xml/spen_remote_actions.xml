@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<remote-actions version="1.2" actionset_label="@string/spen_actions">
+    <action id="reader_click" label="@string/spen_click" priority="1" trigger_key="MEDIA_PLAY_PAUSE">
+        <preference name="gesture" value="click" />
+    </action>
+    <action id="reader_double_click" label="@string/spen_double_click" priority="2" trigger_key="B">
+        <preference name="gesture" value="double_click" />
+    </action>
+    <action id="reader_swipe_left" label="@string/spen_swipe_left" priority="3" trigger_key="PAGE_DOWN">
+        <preference name="gesture" value="swipe_left" />
+    </action>
+    <action id="reader_swipe_right" label="@string/spen_swipe_right" priority="4" trigger_key="PAGE_UP">
+        <preference name="gesture" value="swipe_right" />
+    </action>
+    <action id="reader_swipe_up" label="@string/spen_swipe_up" priority="5" trigger_key="DPAD_UP">
+        <preference name="gesture" value="swipe_up" />
+    </action>
+    <action id="reader_swipe_down" label="@string/spen_swipe_down" priority="6" trigger_key="DPAD_DOWN">
+        <preference name="gesture" value="swipe_down" />
+    </action>
+    <action id="reader_circle_clockwise" label="@string/spen_circle_clockwise" priority="7" trigger_key="PLUS">
+        <preference name="gesture" value="circle_cw" />
+    </action>
+    <action id="reader_circle_counterclockwise" label="@string/spen_circle_counterclockwise" priority="8" trigger_key="MINUS">
+        <preference name="gesture" value="circle_ccw" />
+    </action>
+</remote-actions>

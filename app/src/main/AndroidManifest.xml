@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="com.sec.feature.spen_usp" android:required="false" />
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme"
+        android:supportsRtl="true">
+        <activity android:name=".reader.ReadiumEpubActivity" android:screenOrientation="unspecified" android:exported="true">
+            <intent-filter>
+                <action android:name="com.samsung.android.support.REMOTE_ACTION" />
+            </intent-filter>
+            <meta-data android:name="com.samsung.android.support.REMOTE_ACTION" android:resource="@xml/spen_remote_actions" />
+        </activity>
+        <activity android:name=".settings.SettingsActivity" />
+        <activity android:name=".sync.drive.DriveLibraryPickerActivity" />
+        <activity android:name=".settings.ResetBooksActivity" />
+        <activity android:name=".dictionary.DictionaryActivity" />
+        <activity android:name=".annotations.QuoteColorActivity" />
+        <activity android:name=".annotations.BookQuotesActivity" />
+        <activity android:name=".app.MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/epub+zip" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

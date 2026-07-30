@@ -1,0 +1,402 @@
+package com.michis.reader.settings
+
+import com.michis.reader.R
+import com.michis.reader.sync.*
+import com.michis.reader.sync.drive.*
+import com.michis.reader.theme.AppThemePalette
+import com.michis.reader.ui.LimitedHeightSpinner
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.BitmapFactory
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.view.Gravity
+import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
+import androidx.lifecycle.lifecycleScope
+import com.google.android.gms.auth.api.identity.AuthorizationResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Construye y coordina exclusivamente la seccion de cuenta y Google Drive. */
+class DriveSettingsSection(
+    private val activity: ComponentActivity,
+    private val advancedMode: Boolean,
+    private val openAdvancedSettings: () -> Unit
+) {
+    private var fullSyncConfirmationArmed = false
+    private var fullSyncInProgress = false
+    private var lastFullSyncText: String? = null
+    private var pendingAuthorizationResult: ((AuthorizationResult?) -> Unit)? = null
+    private var panelToRefresh: LinearLayout? = null
+
+    private val libraryPickerLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) panelToRefresh?.let(::render)
+        panelToRefresh = null
+    }
+
+    private val authorizationLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val callback = pendingAuthorizationResult
+        pendingAuthorizationResult = null
+        val resultIntent = result.data
+        if (result.resultCode != Activity.RESULT_OK || resultIntent == null) {
+            callback?.invoke(null)
+            return@registerForActivityResult
+        }
+        val authorization = runCatching {
+            GoogleDriveAuthorizationManager(activity).authorizationClient
+                .getAuthorizationResultFromIntent(resultIntent)
+        }.getOrNull()
+        callback?.invoke(authorization)
+    }
+
+    fun createPanel(): View = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        render(this)
+    }
+
+    private fun render(container: LinearLayout) {
+        container.removeAllViews()
+        val accountManager = OptionalGoogleAccountManager(activity)
+        val session = accountManager.currentSession()
+        if (session == null) {
+            container.addView(description("La lectura local no requiere una cuenta. Google se utilizará únicamente si decides activar la sincronización."))
+            container.addView(Button(activity).apply {
+                text = "Iniciar sesión con Google"; isAllCaps = false
+                setOnClickListener {
+                    isEnabled = false
+                    activity.lifecycleScope.launch {
+                        runCatching { accountManager.signIn(activity) }
+                            .onSuccess {
+                                Toast.makeText(activity, "Sesión iniciada", Toast.LENGTH_SHORT).show()
+                                render(container)
+                            }
+                            .onFailure { error ->
+                                isEnabled = true
+                                val message = when (error) {
+                                    is GetCredentialCancellationException -> "Inicio de sesión cancelado"
+                                    is NoCredentialException -> "No se encontró una cuenta de Google disponible"
+                                    else -> "No se pudo iniciar sesión: ${error.message.orEmpty()}"
+                                }
+                                Toast.makeText(activity, message, Toast.LENGTH_LONG).show()
+                            }
+                    }
+                }
+            })
+        } else {
+            renderSignedIn(container, session, accountManager)
+        }
+        AppThemePalette.apply(activity)
+    }
+
+    private fun renderSignedIn(
+        container: LinearLayout,
+        session: GoogleAccountSession,
+        accountManager: OptionalGoogleAccountManager
+    ) {
+        val authorizationManager = GoogleDriveAuthorizationManager(activity)
+        container.addView(accountHeader(session))
+        if (authorizationManager.isAuthorized()) {
+            val folderRepository = GoogleDriveFolderRepository(activity)
+            val savedFolder = folderRepository.savedFolder(session.accountIdentifier)
+            container.addView(description("Google Drive está conectado. Puedes elegir una carpeta existente como biblioteca compartida entre tus dispositivos."))
+            if (savedFolder == null) {
+                container.addView(description("La carpeta de sincronización todavía no ha sido preparada."))
+            } else {
+                container.addView(description("Carpeta vinculada: ${savedFolder.name}"))
+                lastFullSyncText?.let { container.addView(description(it)) }
+            }
+            if (advancedMode || savedFolder == null) container.addView(Button(activity).apply {
+                text = if (savedFolder == null) "Preparar carpeta Michis Reader" else "Verificar carpeta Michis Reader"
+                isAllCaps = false
+                setOnClickListener {
+                    isEnabled = false
+                    prepareFolder(session, authorizationManager, folderRepository, container, this)
+                }
+            })
+            val libraryRepository = GoogleDriveBookLibraryRepository(activity)
+            val selectedSources = libraryRepository.selectedSources(session.accountIdentifier)
+            container.addView(description(
+                if (selectedSources.isEmpty()) "Todavía no has elegido libros o carpetas de Drive."
+                else "Biblioteca de Drive: ${selectedSources.size} elementos seleccionados"
+            ))
+            container.addView(Button(activity).apply {
+                text = if (selectedSources.isEmpty()) "Elegir libros y carpetas" else "Editar libros y carpetas"
+                isAllCaps = false
+                setOnClickListener {
+                    isEnabled = false
+                    chooseLibrarySources(session, authorizationManager, container, this)
+                }
+            })
+            if (savedFolder != null) {
+                if (advancedMode && fullSyncConfirmationArmed) container.addView(description(
+                    "Se descargarán y fusionarán los datos más recientes, se aplicarán eliminaciones válidas y después se subirá el resultado combinado."
+                ))
+                container.addView(Button(activity).apply {
+                    text = when {
+                        fullSyncInProgress -> "Sincronizando…"
+                        advancedMode && fullSyncConfirmationArmed -> "Confirmar sincronización"
+                        else -> "Sincronizar ahora"
+                    }
+                    isAllCaps = false; isEnabled = !fullSyncInProgress
+                    setOnClickListener {
+                        if (advancedMode && !fullSyncConfirmationArmed) {
+                            fullSyncConfirmationArmed = true
+                            render(container)
+                        } else {
+                            isEnabled = false; fullSyncInProgress = true
+                            synchronize(session, authorizationManager, folderRepository, savedFolder, container, this)
+                        }
+                    }
+                })
+                container.addView(automaticSyncControls())
+            }
+            if (advancedMode) container.addView(Button(activity).apply {
+                text = "Revocar acceso a Google Drive"; isAllCaps = false
+                setOnClickListener {
+                    isEnabled = false
+                    authorizationManager.authorizationClient
+                        .revokeAccess(authorizationManager.revokeRequest(session.accountIdentifier))
+                        .addOnSuccessListener {
+                            AutomaticDriveSyncScheduler(activity).setEnabled(false)
+                            authorizationManager.clearLocalAuthorizationState()
+                            Toast.makeText(activity, "Acceso a Drive revocado", Toast.LENGTH_SHORT).show()
+                            render(container)
+                        }
+                        .addOnFailureListener { error ->
+                            isEnabled = true
+                            Toast.makeText(activity, "No se pudo revocar Drive: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
+                        }
+                }
+            })
+        } else {
+            container.addView(description("Google Drive todavía no está autorizado. El permiso permite leer la biblioteca EPUB que elijas y mantener sincronizados sus libros."))
+            container.addView(Button(activity).apply {
+                text = "Activar sincronización con Drive"; isAllCaps = false
+                setOnClickListener {
+                    isEnabled = false
+                    requestAuthorization(session, authorizationManager, container, this)
+                }
+            })
+        }
+        container.addView(Button(activity).apply {
+            text = "Cerrar sesión"; isAllCaps = false
+            setOnClickListener {
+                isEnabled = false
+                activity.lifecycleScope.launch {
+                    runCatching { accountManager.signOut() }.onFailure {
+                        Toast.makeText(activity, "La sesión local se cerró, pero Google no pudo limpiar el selector de cuenta", Toast.LENGTH_LONG).show()
+                    }
+                    render(container)
+                }
+            }
+        })
+        if (!advancedMode) container.addView(Button(activity).apply {
+            text = "Ajustes avanzados de Drive"; isAllCaps = false; setOnClickListener { openAdvancedSettings() }
+        })
+    }
+
+    private fun accountHeader(session: GoogleAccountSession) = LinearLayout(activity).apply {
+        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(10))
+        val picture = ImageView(activity).apply {
+            contentDescription = "Foto de perfil de Google"; scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(android.R.drawable.ic_menu_myplaces)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(AppThemePalette.current(activity).card)
+            }
+            clipToOutline = true
+        }
+        addView(picture, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(12) })
+        addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(activity).apply {
+                text = session.displayName.ifBlank { "Cuenta de Google" }; textSize = 18f
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(activity).apply { text = session.accountIdentifier; setPadding(0, dp(3), 0, 0) })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        loadProfilePicture(picture, session.profilePictureUri)
+    }
+
+    private fun requestAuthorization(
+        session: GoogleAccountSession,
+        manager: GoogleDriveAuthorizationManager,
+        container: LinearLayout,
+        sourceButton: Button,
+        onFailure: () -> Unit = {},
+        onAuthorized: (String) -> Unit = {}
+    ) {
+        manager.authorizationClient.authorize(manager.authorizationRequest(session.accountIdentifier))
+            .addOnSuccessListener { result ->
+                if (result.hasResolution()) {
+                    val pendingIntent = result.pendingIntent
+                    if (pendingIntent == null) {
+                        sourceButton.isEnabled = true; onFailure()
+                        Toast.makeText(activity, "Google no proporcionó una pantalla de autorización", Toast.LENGTH_LONG).show()
+                        return@addOnSuccessListener
+                    }
+                    pendingAuthorizationResult = { resolved ->
+                        if (resolved != null && manager.acceptAuthorizationResult(resolved)) {
+                            Toast.makeText(activity, "Drive autorizado", Toast.LENGTH_SHORT).show()
+                            resolved.accessToken?.let(onAuthorized); render(container)
+                        } else {
+                            sourceButton.isEnabled = true; onFailure()
+                            Toast.makeText(activity, "No se concedió el permiso de Drive", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    authorizationLauncher.launch(IntentSenderRequest.Builder(pendingIntent.intentSender).build())
+                } else if (manager.acceptAuthorizationResult(result)) {
+                    Toast.makeText(activity, "Drive autorizado", Toast.LENGTH_SHORT).show()
+                    result.accessToken?.let(onAuthorized); render(container)
+                } else {
+                    sourceButton.isEnabled = true; onFailure()
+                    Toast.makeText(activity, "Google no concedió el permiso solicitado", Toast.LENGTH_LONG).show()
+                }
+            }
+            .addOnFailureListener { error ->
+                sourceButton.isEnabled = true; onFailure()
+                Toast.makeText(activity, "No se pudo autorizar Drive: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun prepareFolder(
+        session: GoogleAccountSession,
+        authorizationManager: GoogleDriveAuthorizationManager,
+        repository: GoogleDriveFolderRepository,
+        container: LinearLayout,
+        sourceButton: Button
+    ) = requestAuthorization(session, authorizationManager, container, sourceButton) { accessToken ->
+        activity.lifecycleScope.launch {
+            runCatching { withContext(Dispatchers.IO) { repository.ensureSyncFolder(accessToken, session.accountIdentifier) } }
+                .onSuccess { folder ->
+                    Toast.makeText(activity, "Carpeta ${folder.name} preparada", Toast.LENGTH_SHORT).show(); render(container)
+                }
+                .onFailure { error ->
+                    sourceButton.isEnabled = true
+                    Toast.makeText(activity, "No se pudo preparar la carpeta: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
+                }
+        }
+    }
+
+    private fun chooseLibrarySources(
+        session: GoogleAccountSession,
+        authorizationManager: GoogleDriveAuthorizationManager,
+        container: LinearLayout,
+        sourceButton: Button
+    ) = requestAuthorization(session, authorizationManager, container, sourceButton) { accessToken ->
+        sourceButton.isEnabled = true; panelToRefresh = container
+        libraryPickerLauncher.launch(Intent(activity, DriveLibraryPickerActivity::class.java).apply {
+            putExtra(DriveLibraryPickerActivity.EXTRA_ACCOUNT_IDENTIFIER, session.accountIdentifier)
+            putExtra(DriveLibraryPickerActivity.EXTRA_ACCESS_TOKEN, accessToken)
+        })
+    }
+
+    private fun synchronize(
+        session: GoogleAccountSession,
+        authorizationManager: GoogleDriveAuthorizationManager,
+        repository: GoogleDriveFolderRepository,
+        folder: GoogleDriveFolder,
+        container: LinearLayout,
+        sourceButton: Button
+    ) = requestAuthorization(session, authorizationManager, container, sourceButton, onFailure = {
+        fullSyncInProgress = false; fullSyncConfirmationArmed = false; render(container)
+    }) { accessToken ->
+        activity.lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    GoogleDriveSyncCoordinator(activity).synchronize(accessToken, session.accountIdentifier, folder, repository)
+                }
+            }.onSuccess { synced ->
+                fullSyncInProgress = false; fullSyncConfirmationArmed = false
+                lastFullSyncText = if (synced.firstBackup) {
+                    "Sincronización inicial completada: ${synced.documentCount} libros respaldados."
+                } else {
+                    "Sincronización completada: ${synced.documentCount} libros; " +
+                        "${synced.readingMerge.progressUpdates} progresos, " +
+                        "${synced.readingMerge.insertedAnnotations + synced.readingMerge.updatedAnnotations} citas/marcadores, " +
+                        "${synced.dictionaryMerge.insertedEntries + synced.dictionaryMerge.updatedEntries} entradas y " +
+                        "${synced.deletionMerge.appliedDeletions} eliminaciones."
+                }
+                render(container); Toast.makeText(activity, "Sincronización verificada", Toast.LENGTH_LONG).show()
+            }.onFailure { error ->
+                fullSyncInProgress = false; fullSyncConfirmationArmed = false; sourceButton.isEnabled = true
+                Toast.makeText(activity, "Falló la sincronización: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun automaticSyncControls(): View = LinearLayout(activity).apply {
+        orientation = LinearLayout.VERTICAL
+        val scheduler = AutomaticDriveSyncScheduler(activity)
+        addView(fieldTitle("Sincronización automática"))
+        addView(Switch(activity).apply {
+            text = "Sincronizar cuando haya conexión"; isChecked = scheduler.isEnabled()
+            setOnCheckedChangeListener { _, enabled -> scheduler.setEnabled(enabled) }
+        })
+        addView(fieldTitle("Frecuencia"))
+        val intervals = listOf(15L, 60L, 360L, 1_440L)
+        addView(LimitedHeightSpinner(activity).apply {
+            adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("Cada 15 minutos", "Cada hora", "Cada 6 horas", "Cada 24 horas"))
+            setSelection(intervals.indexOf(scheduler.intervalMinutes()).coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    scheduler.setIntervalMinutes(intervals[position])
+                }
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        })
+        addView(fieldTitle("Tipo de conexión"))
+        addView(Switch(activity).apply {
+            text = "Sincronizar solo con Wi-Fi"; isChecked = scheduler.wifiOnly()
+            setOnCheckedChangeListener { _, checked -> scheduler.setWifiOnly(checked) }
+        })
+        addView(description("Último estado: ${scheduler.lastStatus()}"))
+    }
+
+    private fun loadProfilePicture(target: ImageView, value: String) {
+        if (value.isBlank()) return
+        activity.lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching {
+                    val uri = Uri.parse(value)
+                    val stream = if (uri.scheme == "http" || uri.scheme == "https") {
+                        java.net.URL(value).openConnection().apply { connectTimeout = 5_000; readTimeout = 5_000 }.getInputStream()
+                    } else activity.contentResolver.openInputStream(uri)
+                    stream?.use(BitmapFactory::decodeStream)
+                }.getOrNull()
+            }
+            if (bitmap != null && target.isAttachedToWindow) target.setImageBitmap(bitmap)
+        }
+    }
+
+    private fun fieldTitle(value: String) = TextView(activity).apply {
+        text = value; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD
+        setPadding(dp(2), dp(10), dp(2), dp(5))
+    }
+
+    private fun description(value: String) = TextView(activity).apply {
+        text = value; setPadding(dp(2), dp(4), dp(2), dp(7))
+    }
+
+    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+}

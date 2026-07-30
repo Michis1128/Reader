@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Michis Reader</string>
+    <string name="google_web_client_id">33987563321-0dbosimmoopurmg093nbi3tdbk80mgru.apps.googleusercontent.com</string>
+    <string name="spen_actions">Controles del lector</string>
+    <string name="spen_click">Página siguiente</string>
+    <string name="spen_double_click">Página anterior</string>
+    <string name="spen_swipe_left">Agregar marcador</string>
+    <string name="spen_swipe_right">Cambiar tema</string>
+    <string name="spen_swipe_up">Aumentar texto</string>
+    <string name="spen_swipe_down">Reducir texto</string>
+    <string name="spen_circle_clockwise">Agregar al diccionario</string>
+    <string name="spen_circle_counterclockwise">Agregar cita</string>
+</resources>
