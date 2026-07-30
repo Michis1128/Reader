@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var librarySections: LibrarySectionsController
     private lateinit var syncController: LibrarySyncController
     private lateinit var libraryDisplayButton: Button
+    private lateinit var libraryFilterButton: Button
     private lateinit var syncStatusText: TextView
     private lateinit var syncButton: Button
     private lateinit var libraryPathText: TextView
@@ -65,7 +66,8 @@ class MainActivity : ComponentActivity() {
         libraryBrowserState = LibraryBrowserState(this, database)
         val mainScreen = buildScreen()
         libraryViewRenderer = LibraryViewRenderer(
-            this, database, documentList, ::navigateToParentFolder, ::openLibraryFolder, ::openReader, ::showDocumentActions
+            this, database, documentList, ::navigateToParentFolder, ::openLibraryFolder, ::openReader,
+            ::showDocumentActions, ::moveLibraryItem
         )
         importCoordinator = LibraryImportCoordinator(
             contentResolver, database, { refreshLibrary() }, ::openReader
@@ -148,6 +150,8 @@ class MainActivity : ComponentActivity() {
             addView(tabButton("Diccionarios") { showDictionaries() })
             libraryDisplayButton = tabButton(displayModeIcon()) { cycleLibraryDisplayMode() }
             addView(libraryDisplayButton)
+            libraryFilterButton = tabButton("Filtro: ${libraryBrowserState.sortMode.label}") { showLibraryFilters() }
+            addView(libraryFilterButton)
         }) })
         libraryPathText = TextView(context).apply {
             text = "Mi biblioteca"; textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -195,7 +199,11 @@ class MainActivity : ComponentActivity() {
         val documents = database.findDocumentsInFolder(currentFolderIdentifier, query)
         val folders = if (query.isBlank()) database.libraryFolders(currentFolderIdentifier) else emptyList()
         if (documents.isEmpty() && folders.isEmpty() && !libraryBrowserState.canNavigateBack) documentList.addView(emptyMessage)
-        libraryViewRenderer.render(folders, documents, libraryBrowserState.displayMode, libraryBrowserState.canNavigateBack)
+        val items = libraryBrowserState.orderedItems(folders, documents)
+        libraryViewRenderer.render(
+            items, libraryBrowserState.displayMode, libraryBrowserState.canNavigateBack,
+            libraryBrowserState.sortMode == LibrarySortMode.CUSTOM && query.isBlank()
+        )
         AppThemePalette.apply(this)
     }
 
@@ -226,6 +234,29 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun displayModeIcon() = libraryBrowserState.displayModeIcon()
+
+    private fun showLibraryFilters() {
+        val modes = LibrarySortMode.entries
+        AlertDialog.Builder(this)
+            .setTitle("Ordenar biblioteca")
+            .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), libraryBrowserState.sortMode.ordinal) { dialog, index ->
+                libraryBrowserState.selectSortMode(modes[index])
+                libraryFilterButton.text = "Filtro: ${modes[index].label}"
+                dialog.dismiss()
+                refreshLibrary()
+                if (modes[index] == LibrarySortMode.CUSTOM) {
+                    Toast.makeText(this, "Mantén presionado y arrastra libros o carpetas para ordenarlos", Toast.LENGTH_LONG).show()
+                }
+            }.show()
+    }
+
+    private fun moveLibraryItem(draggedKey: String, targetKey: String) {
+        if (libraryBrowserState.sortMode != LibrarySortMode.CUSTOM) return
+        val documents = database.findDocumentsInFolder(libraryBrowserState.currentFolderIdentifier, "")
+        val folders = database.libraryFolders(libraryBrowserState.currentFolderIdentifier)
+        libraryBrowserState.moveCustomItem(libraryBrowserState.orderedItems(folders, documents), draggedKey, targetKey)
+        refreshLibrary("")
+    }
 
     private fun showDocumentActions(document: LibraryDocument) = documentActions.show(document)
 

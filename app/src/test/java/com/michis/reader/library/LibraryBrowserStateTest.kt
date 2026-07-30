@@ -57,4 +57,27 @@ class LibraryBrowserStateTest {
         assertEquals(1, state.cycleDisplayMode())
         assertEquals(1, LibraryBrowserState(context, database).displayMode)
     }
+
+    @Test
+    fun filtersAndCustomOrderPersistForCurrentFolder() {
+        database.saveLibraryFolder("folder-z", null, "Zeta")
+        val alphaIdentifier = database.saveDocument("content://books/alpha.epub", "Alpha.epub")
+        val betaIdentifier = database.saveDocument("content://books/beta.epub", "Beta.epub")
+        val state = LibraryBrowserState(context, database)
+        val folders = database.libraryFolders(null)
+        val documents = database.findDocumentsInFolder(null)
+
+        state.selectSortMode(LibrarySortMode.TITLE)
+        assertEquals(
+            listOf("document:$alphaIdentifier", "document:$betaIdentifier", "folder:folder-z"),
+            state.orderedItems(folders, documents).map { it.key }
+        )
+
+        state.selectSortMode(LibrarySortMode.CUSTOM)
+        val initial = state.orderedItems(folders, documents)
+        state.moveCustomItem(initial, "folder:folder-z", "document:$alphaIdentifier")
+
+        assertEquals("folder:folder-z", LibraryBrowserState(context, database)
+            .orderedItems(folders, documents).first().key)
+    }
 }

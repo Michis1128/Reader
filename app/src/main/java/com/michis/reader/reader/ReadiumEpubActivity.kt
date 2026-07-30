@@ -60,6 +60,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var contentsPanel: View
     private lateinit var contentsController: EpubContentsPanel
     private lateinit var progressSlider: SeekBar
+    private lateinit var compactProgressSlider: SeekBar
     private lateinit var progressLabel: TextView
     private lateinit var dictionaryButton: Button
     private lateinit var navigator: EpubNavigatorFragment
@@ -102,6 +103,10 @@ class ReadiumEpubActivity : FragmentActivity() {
         addView(topControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         bottomControls = buildBottomControls()
         addView(bottomControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+        compactProgressSlider = buildCompactProgressSlider().apply { visibility = View.GONE }
+        addView(compactProgressSlider, FrameLayout.LayoutParams(-1, dp(28), Gravity.BOTTOM).apply {
+            marginStart = dp(20); marginEnd = dp(20); bottomMargin = dp(8)
+        })
         settingsPanel = buildSettingsPanel().apply { visibility = View.GONE }
         addView(settingsPanel, FrameLayout.LayoutParams(dp(340), -1, Gravity.END))
         contentsPanel = buildContentsPanel().apply { visibility = View.GONE }
@@ -157,6 +162,30 @@ class ReadiumEpubActivity : FragmentActivity() {
         addView(progressSlider, LinearLayout.LayoutParams(-1, dp(36)))
     }
 
+    private fun buildCompactProgressSlider() = SeekBar(this).apply {
+        max = 1
+        alpha = .76f
+        contentDescription = "Desplazarse por el libro"
+        setPadding(dp(4), 0, dp(4), 0)
+        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onStartTrackingTouch(seekBar: SeekBar) {
+                userIsDraggingProgress = true
+            }
+
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                progressSlider.progress = progress
+                navigateToPage(progress, animated = false)
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar) {
+                userIsDraggingProgress = false
+                progressSlider.progress = seekBar.progress
+                navigateToPage(seekBar.progress)
+            }
+        })
+    }
+
     private fun buildSettingsPanel(): View = EpubReadingSettingsPanel(
         activity = this,
         settings = readerSettings,
@@ -197,6 +226,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             refreshDictionaryButton()
             pagePositions = opened.positions()
             progressSlider.max = (pagePositions.size - 1).coerceAtLeast(1)
+            compactProgressSlider.max = progressSlider.max
             contentsController.populate(document.title, opened.tableOfContents)
             observeProgress()
             decorationController.attach(opened, navigator)
@@ -341,6 +371,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                     database.updateProgress(document.identifier, locator.locations.position ?: 0, progression.toFloat())
                     val pageIndex = ((locator.locations.position ?: 1) - 1).coerceIn(0, (pagePositions.size - 1).coerceAtLeast(0))
                     if (!userIsDraggingProgress) progressSlider.progress = pageIndex
+                    if (!userIsDraggingProgress) compactProgressSlider.progress = pageIndex
                     if (!userIsDraggingProgress) progressLabel.text = "Página ${pageIndex + 1} de ${pagePositions.size.coerceAtLeast(1)}"
                 }
             }
@@ -480,6 +511,11 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (::compactProgressSlider.isInitialized && compactProgressSlider.visibility == View.VISIBLE) {
+            val sliderBounds = Rect()
+            compactProgressSlider.getGlobalVisibleRect(sliderBounds)
+            if (sliderBounds.contains(event.rawX.toInt(), event.rawY.toInt())) return super.dispatchTouchEvent(event)
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 configureReaderScreenTimeout()
@@ -577,7 +613,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             if (view is ViewGroup) repeat(view.childCount) { recolor(view.getChildAt(it), textColor) }
         }
         settingsPanel.setBackgroundColor(background)
-        recolor(topControls); recolor(bottomControls); recolor(settingsPanel); recolor(contentsPanel)
+        recolor(topControls); recolor(bottomControls); recolor(compactProgressSlider); recolor(settingsPanel); recolor(contentsPanel)
         updateReaderSystemBarContrast(background)
     }
 
@@ -627,6 +663,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         controlsAreVisible = !controlsAreVisible
         topControls.visibility = if (controlsAreVisible) View.VISIBLE else View.INVISIBLE
         bottomControls.visibility = if (controlsAreVisible) View.VISIBLE else View.INVISIBLE
+        compactProgressSlider.visibility = if (controlsAreVisible) View.GONE else View.VISIBLE
         setSystemBarsVisible(controlsAreVisible)
     }
 
