@@ -323,18 +323,22 @@ class DriveSettingsSection(
         activity.lifecycleScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    GoogleDriveSyncCoordinator(activity).synchronize(accessToken, session.accountIdentifier, folder, repository)
+                    GoogleDriveSyncCoordinator(activity).synchronize(
+                        accessToken, session.accountIdentifier, folder, repository
+                    ) { step ->
+                        activity.runOnUiThread {
+                            lastFullSyncText = step
+                            render(container)
+                        }
+                    }
                 }
             }.onSuccess { synced ->
                 fullSyncInProgress = false; fullSyncConfirmationArmed = false
                 lastFullSyncText = if (synced.firstBackup) {
                     "Sincronización inicial completada: ${synced.documentCount} libros respaldados."
                 } else {
-                    "Sincronización completada: ${synced.documentCount} libros; " +
-                        "${synced.readingMerge.progressUpdates} progresos, " +
-                        "${synced.readingMerge.insertedAnnotations + synced.readingMerge.updatedAnnotations} citas/marcadores, " +
-                        "${synced.dictionaryMerge.insertedEntries + synced.dictionaryMerge.updatedEntries} entradas y " +
-                        "${synced.deletionMerge.appliedDeletions} eliminaciones."
+                    "Sincronización incremental completada: ${synced.documentCount} libros registrados y " +
+                        "${synced.downloadedDocumentCount} EPUB nuevos o modificados descargados."
                 }
                 render(container); Toast.makeText(activity, "Sincronización verificada", Toast.LENGTH_LONG).show()
             }.onFailure { error ->

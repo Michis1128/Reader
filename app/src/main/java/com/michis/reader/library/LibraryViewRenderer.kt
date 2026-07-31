@@ -94,7 +94,7 @@ internal class LibraryViewRenderer(
         when (item) {
             is LibraryItem.Folder -> {
                 addView(TextView(context).apply {
-                    text = "📁"; textSize = if (displayMode == 0) 54f else 38f; gravity = Gravity.CENTER
+                    text = "📚"; textSize = if (displayMode == 0) 54f else 38f; gravity = Gravity.CENTER
                     setTextColor(Color.rgb(92, 73, 122))
                 }, LinearLayout.LayoutParams(-1, 0, 1f))
                 addView(cardTitle(item.value.name))
@@ -133,7 +133,7 @@ internal class LibraryViewRenderer(
     private fun folderCard(folder: LibraryFolder, compact: Boolean): View = horizontalLayout {
         setBackgroundResource(R.drawable.rounded_panel)
         setPadding(dp(16), if (compact) dp(10) else dp(15), dp(16), if (compact) dp(10) else dp(15))
-        addView(TextView(context).apply { text = "📁"; textSize = if (compact) 24f else 32f })
+        addView(TextView(context).apply { text = "📚"; textSize = if (compact) 24f else 32f })
         addView(TextView(context).apply {
             text = folder.name; textSize = if (compact) 17f else 19f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(dp(12), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, -2, 1f))

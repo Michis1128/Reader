@@ -6,6 +6,7 @@ import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 
 import android.graphics.Color
+import android.app.AlertDialog
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -56,8 +57,11 @@ class DictionaryActivity : ComponentActivity() {
 
     private fun showCategories() {
         selectedCategory = null; content.removeAllViews(); titleView.text = "Diccionario · ${document.title}"
+        content.addView(message(
+            "Organiza palabras, personajes o conceptos en subcategorías. Primero crea una subcategoría y después agrega dentro las palabras o frases."
+        ).apply { setBackgroundResource(R.drawable.rounded_panel) })
         if (pendingTerm.isNotBlank()) content.addView(TextView(this).apply {
-            text = "Selecciona una subcategoría para “$pendingTerm” y decide si deseas escribir su descripción ahora o después."
+            text = "Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer; después podrás escribir su descripción ahora o dejarla pendiente."
             textSize = 16f; setPadding(dp(12), dp(14), dp(12), dp(18)); setBackgroundResource(R.drawable.rounded_panel)
         })
         content.addView(sectionTitle("Subcategorías"))
@@ -66,6 +70,10 @@ class DictionaryActivity : ComponentActivity() {
             setOnClickListener { showSharingOptions() }
         })
         val categories = database.dictionaryCategories(document.identifier)
+        if (categories.isNotEmpty() && pendingTerm.isBlank()) content.addView(Button(this).apply {
+            text = "Seleccionar subcategorías para eliminar"; isAllCaps = false
+            setOnClickListener { showCategorySelection(categories) }
+        })
         categories.forEach { category -> content.addView(card(category.name) { if (pendingTerm.isBlank()) showEntries(category) else showEntryEditor(category, null) }) }
         if (categories.isEmpty()) content.addView(message("Este libro todavía no tiene subcategorías. Crea la primera, por ejemplo: Personajes, Palabras o Lugares."))
         val categoryName = EditText(this).apply { hint = "Nombre de la nueva subcategoría"; setSingleLine(); setBackgroundResource(R.drawable.rounded_panel) }
@@ -86,8 +94,58 @@ class DictionaryActivity : ComponentActivity() {
     private fun showEntries(category: DictionaryCategory) {
         selectedCategory = category; content.removeAllViews(); titleView.text = category.name
         val entries = database.dictionaryEntries(category.identifier)
+        content.addView(Button(this).apply {
+            text = "Agregar palabra o frase"; isAllCaps = false; setOnClickListener { showEntryEditor(category, null) }
+        })
+        if (entries.isNotEmpty()) content.addView(Button(this).apply {
+            text = "Seleccionar elementos para eliminar"; isAllCaps = false
+            setOnClickListener { showEntrySelection(category, entries) }
+        })
         entries.forEach { entry -> content.addView(card(entry.term, entry.description.ifBlank { "Sin descripción" }) { showEntryEditor(category, entry) }) }
         if (entries.isEmpty()) content.addView(message("Esta subcategoría aún no tiene elementos."))
+    }
+
+    private fun showCategorySelection(categories: List<DictionaryCategory>) {
+        selectedCategory = null; content.removeAllViews(); titleView.text = "Eliminar subcategorías"
+        content.addView(message("Selecciona una o varias subcategorías. También se eliminarán todas las entradas que contienen."))
+        val selected = linkedSetOf<Long>()
+        categories.forEach { category -> content.addView(CheckBox(this).apply {
+            text = category.name; setPadding(dp(12), dp(12), dp(12), dp(12))
+            setOnCheckedChangeListener { _, checked -> if (checked) selected += category.identifier else selected -= category.identifier }
+        }) }
+        content.addView(Button(this).apply {
+            text = "Eliminar seleccionadas"; isAllCaps = false; setOnClickListener {
+                if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos una subcategoría", Toast.LENGTH_SHORT).show()
+                else confirmDeletion("Eliminar subcategorías", "Se eliminarán ${selected.size} subcategorías y sus elementos.") {
+                    selected.forEach(database::deleteDictionaryCategory); showCategories()
+                }
+            }
+        })
+        content.addView(Button(this).apply { text = "Cancelar"; isAllCaps = false; setOnClickListener { showCategories() } })
+    }
+
+    private fun showEntrySelection(category: DictionaryCategory, entries: List<DictionaryEntry>) {
+        selectedCategory = category; content.removeAllViews(); titleView.text = "Eliminar de ${category.name}"
+        content.addView(message("Selecciona todas las palabras o frases que deseas eliminar."))
+        val selected = linkedSetOf<Long>()
+        entries.forEach { entry -> content.addView(CheckBox(this).apply {
+            text = entry.term; setPadding(dp(12), dp(12), dp(12), dp(12))
+            setOnCheckedChangeListener { _, checked -> if (checked) selected += entry.identifier else selected -= entry.identifier }
+        }) }
+        content.addView(Button(this).apply {
+            text = "Eliminar seleccionados"; isAllCaps = false; setOnClickListener {
+                if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos un elemento", Toast.LENGTH_SHORT).show()
+                else confirmDeletion("Eliminar elementos", "Se eliminarán ${selected.size} elementos del diccionario.") {
+                    selected.forEach(database::deleteDictionaryEntry); showEntries(category)
+                }
+            }
+        })
+        content.addView(Button(this).apply { text = "Cancelar"; isAllCaps = false; setOnClickListener { showEntries(category) } })
+    }
+
+    private fun confirmDeletion(title: String, message: String, action: () -> Unit) {
+        AlertDialog.Builder(this).setTitle(title).setMessage(message)
+            .setNegativeButton("Cancelar", null).setPositiveButton("Eliminar") { _, _ -> action() }.show()
     }
 
     private fun showSharingOptions() {

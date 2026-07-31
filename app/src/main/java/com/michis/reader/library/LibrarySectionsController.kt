@@ -15,6 +15,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Button
+import android.widget.CheckBox
 
 /** Presenta las secciones de citas, marcadores y diccionarios de la biblioteca. */
 internal class LibrarySectionsController(
@@ -27,6 +29,10 @@ internal class LibrarySectionsController(
         prepareSection()
         val annotations = database.annotations().filter { it.kind == kind }
         if (annotations.isEmpty()) addEmpty("Las citas, notas y marcadores de todos tus libros aparecerán aquí.")
+        if (annotations.isNotEmpty()) container.addView(Button(activity).apply {
+            text = "Seleccionar ${if (kind == "cita") "citas" else "marcadores"} para eliminar"
+            isAllCaps = false; setOnClickListener { showAnnotationSelection(kind, annotations) }
+        })
         if (kind == "cita") {
             annotations.groupBy { it.documentIdentifier }.forEach { (documentIdentifier, quotes) ->
                 val document = database.findDocument(documentIdentifier) ?: return@forEach
@@ -63,6 +69,39 @@ internal class LibrarySectionsController(
                 setOnLongClickListener { showAnnotationActions(annotation, kind); true }
             })
         }
+    }
+
+    private fun showAnnotationSelection(kind: String, annotations: List<SavedAnnotation>) {
+        prepareSection()
+        val selected = linkedSetOf<Long>()
+        container.addView(TextView(activity).apply {
+            text = "Selecciona uno o varios ${if (kind == "cita") "fragmentos" else "marcadores"}."
+            textSize = 17f; setPadding(dp(12), dp(12), dp(12), dp(16))
+        })
+        annotations.forEach { annotation ->
+            container.addView(CheckBox(activity).apply {
+                val book = database.findDocument(annotation.documentIdentifier)?.title ?: "Libro eliminado"
+                text = "${annotation.selectedText.ifBlank { "Página marcada" }}\n$book"
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected += annotation.identifier else selected -= annotation.identifier
+                }
+            })
+        }
+        container.addView(Button(activity).apply {
+            text = "Eliminar seleccionados"; isAllCaps = false; setOnClickListener {
+                if (selected.isEmpty()) return@setOnClickListener
+                AlertDialog.Builder(activity).setTitle("Eliminar selección")
+                    .setMessage("Se eliminarán ${selected.size} elementos y el cambio se sincronizará con Drive.")
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Eliminar") { _, _ ->
+                        selected.forEach(database::deleteAnnotation); showAnnotations(kind)
+                    }.show()
+            }
+        })
+        container.addView(Button(activity).apply {
+            text = "Cancelar"; isAllCaps = false; setOnClickListener { showAnnotations(kind) }
+        })
     }
 
     fun showDictionaries() {

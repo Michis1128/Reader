@@ -56,7 +56,11 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
         sources.distinctBy { it.identifier }.forEach { source ->
             array.put(JSONObject().put("id", source.identifier).put("name", source.name).put("folder", source.isFolder))
         }
-        preferences.edit().putString("selected_sources_$suffix", array.toString()).apply()
+        preferences.edit()
+            .putString("selected_sources_$suffix", array.toString())
+            .remove("changes_token_$suffix")
+            .remove("known_folders_$suffix")
+            .apply()
     }
 
     fun listSelectableSources(accessToken: String): List<DriveLibrarySource> = listFiles(
@@ -95,6 +99,11 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
     fun synchronizeSelectedFolder(accessToken: String, accountIdentifier: String): DriveLibrarySyncResult {
         val selectedSources = selectedSources(accountIdentifier)
         if (selectedSources.isEmpty()) return DriveLibrarySyncResult(0, 0)
+        val accountSuffix = accountIdentifier.lowercase().hashCode()
+        preferences.getString("changes_token_$accountSuffix", null)?.let { token ->
+            return synchronizeDriveChanges(accessToken, accountIdentifier, selectedSources, token)
+        }
+        val initialChangesToken = getStartPageToken(accessToken)
         val database = ReaderDatabase.getInstance(context)
         val destinationRoot = File(context.filesDir, "drive-library/${accountIdentifier.lowercase().hashCode()}")
             .apply { mkdirs() }
@@ -146,8 +155,109 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
                     database.saveDocument(Uri.fromFile(destination).toString(), fileName, parentFolderIdentifier)
             }
         }
+        preferences.edit()
+            .putString("changes_token_$accountSuffix", initialChangesToken)
+            .putString("known_folders_$accountSuffix", JSONArray(visitedFolders.toList()).toString())
+            .apply()
         return DriveLibrarySyncResult(discovered, downloaded)
     }
+
+    private fun synchronizeDriveChanges(
+        accessToken: String,
+        accountIdentifier: String,
+        selectedSources: List<DriveLibrarySource>,
+        savedToken: String
+    ): DriveLibrarySyncResult {
+        val suffix = accountIdentifier.lowercase().hashCode()
+        val database = ReaderDatabase.getInstance(context)
+        val destinationRoot = File(context.filesDir, "drive-library/$suffix").apply { mkdirs() }
+        val knownFolders = mutableSetOf<String>().apply {
+            val stored = runCatching { JSONArray(preferences.getString("known_folders_$suffix", "[]")) }.getOrDefault(JSONArray())
+            repeat(stored.length()) { add(stored.optString(it)) }
+            addAll(selectedSources.filter { it.isFolder }.map { it.identifier })
+        }
+        val selectedFiles = selectedSources.filterNot { it.isFolder }.map { it.identifier }.toSet()
+        var pageToken = savedToken
+        var finalToken = savedToken
+        var discovered = 0
+        var downloaded = 0
+        do {
+            val parameters = linkedMapOf(
+                "pageToken" to pageToken,
+                "pageSize" to "1000",
+                "spaces" to "drive",
+                "includeRemoved" to "true",
+                "fields" to "nextPageToken,newStartPageToken,changes(fileId,removed,file(id,name,mimeType,modifiedTime,size,trashed,parents))"
+            )
+            val url = DRIVE_CHANGES_ENDPOINT + "?" + parameters.entries.joinToString("&") {
+                URLEncoder.encode(it.key, StandardCharsets.UTF_8.name()) + "=" +
+                    URLEncoder.encode(it.value, StandardCharsets.UTF_8.name())
+            }
+            val response = jsonRequest(url, accessToken)
+            val changes = response.optJSONArray("changes") ?: JSONArray()
+            repeat(changes.length()) { index ->
+                val change = changes.optJSONObject(index) ?: return@repeat
+                if (change.optBoolean("removed", false)) return@repeat
+                val file = change.optJSONObject("file") ?: return@repeat
+                if (file.optBoolean("trashed", false)) return@repeat
+                val identifier = file.optString("id")
+                val parents = file.optJSONArray("parents")?.let { array ->
+                    buildList { repeat(array.length()) { add(array.optString(it)) } }
+                }.orEmpty()
+                val knownParent = parents.firstOrNull { it in knownFolders }
+                if (file.optString("mimeType") == FOLDER_MIME_TYPE && knownParent != null) {
+                    knownFolders += identifier
+                    database.saveLibraryFolder(identifier, knownParent, file.optString("name", "Carpeta"))
+                } else if (isEpub(file) && (identifier in selectedFiles || knownParent != null)) {
+                    discovered++
+                    if (downloadChangedEpub(accessToken, accountIdentifier, destinationRoot, file, knownParent)) downloaded++
+                }
+            }
+            val next = response.optString("nextPageToken").takeIf { it.isNotBlank() }
+            if (next != null) pageToken = next
+            else {
+                finalToken = response.optString("newStartPageToken").takeIf { it.isNotBlank() } ?: pageToken
+                pageToken = ""
+            }
+        } while (pageToken.isNotBlank())
+        preferences.edit()
+            .putString("changes_token_$suffix", finalToken)
+            .putString("known_folders_$suffix", JSONArray(knownFolders.toList()).toString())
+            .apply()
+        return DriveLibrarySyncResult(discovered, downloaded)
+    }
+
+    private fun downloadChangedEpub(
+        accessToken: String,
+        accountIdentifier: String,
+        destinationRoot: File,
+        item: JSONObject,
+        parentFolderIdentifier: String?
+    ): Boolean {
+        val identifier = item.getString("id")
+        val fileName = safeFileName(item.optString("name", "libro.epub"))
+        val directory = File(destinationRoot, identifier).apply { mkdirs() }
+        val destination = File(directory, fileName)
+        val remoteVersion = item.optString("modifiedTime") + ":" + item.optLong("size", -1L)
+        val versionKey = "remote_version_${accountIdentifier.lowercase().hashCode()}_$identifier"
+        var downloaded = false
+        if (!destination.exists() || preferences.getString(versionKey, null) != remoteVersion) {
+            val temporary = File(directory, "$fileName.download")
+            temporary.outputStream().buffered().use { output -> download(accessToken, identifier, output) }
+            check(temporary.renameTo(destination) || runCatching {
+                temporary.copyTo(destination, overwrite = true); temporary.delete(); true
+            }.getOrDefault(false)) { "No se pudo guardar $fileName" }
+            preferences.edit().putString(versionKey, remoteVersion).apply()
+            downloaded = true
+        }
+        ReaderDatabase.getInstance(context).saveDocument(Uri.fromFile(destination).toString(), fileName, parentFolderIdentifier)
+        return downloaded
+    }
+
+    private fun getStartPageToken(accessToken: String): String = jsonRequest(
+        "$DRIVE_CHANGES_ENDPOINT/startPageToken",
+        accessToken
+    ).getString("startPageToken")
 
     private fun fileMetadata(accessToken: String, identifier: String): JSONObject =
         jsonRequest("$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,modifiedTime,size,trashed", accessToken)
@@ -206,6 +316,7 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
     companion object {
         private const val PREFERENCES_NAME = "google_drive_book_library"
         private const val DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files"
+        private const val DRIVE_CHANGES_ENDPOINT = "https://www.googleapis.com/drive/v3/changes"
         private const val FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
         private const val EPUB_MIME_TYPE = "application/epub+zip"
     }

@@ -62,7 +62,9 @@ internal class LibrarySyncController(
                         withContext(Dispatchers.IO) {
                             GoogleDriveSyncCoordinator(activity).synchronize(
                                 accessToken, session.accountIdentifier, folder, folderRepository
-                            )
+                            ) { step ->
+                                activity.runOnUiThread { statusText.text = "Sincronización: $step" }
+                            }
                         }
                     }
                     syncResult.onSuccess { synchronized ->

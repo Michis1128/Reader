@@ -16,6 +16,7 @@ class LibrarySyncSnapshotBuilder(
     private val context: Context,
     private val database: ReaderDatabase = ReaderDatabase.getInstance(context)
 ) {
+    private val fingerprintCache = context.getSharedPreferences("document_fingerprint_cache", Context.MODE_PRIVATE)
 
     fun build(): LibrarySyncSnapshot {
         val documentsJson = JSONArray()
@@ -114,6 +115,11 @@ class LibrarySyncSnapshotBuilder(
     }
 
     private fun documentFingerprint(document: LibraryDocument): Pair<String, String> {
+        val cacheKey = database.documentSyncMetadata(document.identifier).syncIdentifier
+        fingerprintCache.getString(cacheKey, null)?.let { cached ->
+            val separator = cached.indexOf(':')
+            if (separator > 0) return cached.substring(separator + 1) to cached.substring(0, separator)
+        }
         return runCatching {
             val digest = MessageDigest.getInstance("SHA-256")
             val documentStream = context.contentResolver.openInputStream(Uri.parse(document.uri))
@@ -130,7 +136,7 @@ class LibrarySyncSnapshotBuilder(
         }.getOrElse {
             val fallback = "${document.fileName.lowercase()}|${document.title}|${document.author}|${document.format}"
             MessageDigest.getInstance("SHA-256").digest(fallback.toByteArray()).toHex() to "sha256-metadata-fallback"
-        }
+        }.also { (value, type) -> fingerprintCache.edit().putString(cacheKey, "$type:$value").apply() }
     }
 
     private fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }

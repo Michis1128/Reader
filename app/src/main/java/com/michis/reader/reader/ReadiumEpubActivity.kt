@@ -9,6 +9,7 @@ import com.michis.reader.data.*
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
+import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.theme.*
 
 import android.app.AlertDialog
@@ -213,18 +214,25 @@ class ReadiumEpubActivity : FragmentActivity() {
             val url = Uri.parse(document.uri).toAbsoluteUrl() ?: run { showError("Ubicación no válida"); return@launch }
             val asset = assetRetriever.retrieve(url).getOrElse { showError(it.toString()); return@launch }
             val opened = opener.open(asset, allowUserInteraction = false).getOrElse { showError(it.toString()); return@launch }
-            val initialLocator = opened.locateProgression(document.progress.toDouble().coerceIn(0.0, 1.0))
+            pagePositions = opened.positions()
+            val savedLocation = database.readerLocation(document.identifier)
+            val initialLocator = pagePositions.firstOrNull { it.locations.position == savedLocation }
+                ?: opened.locateProgression(document.progress.toDouble().coerceIn(0.0, 1.0))
             currentPreferences = loadInitialPreferences()
             val factory = EpubNavigatorFactory(opened)
             supportFragmentManager.fragmentFactory = factory.createFragmentFactory(
                 initialLocator = initialLocator,
                 initialPreferences = currentPreferences,
+                paginationListener = object : EpubNavigatorFragment.PaginationListener {
+                    override fun onPageLoaded() {
+                        applyTopAnchoredContent()
+                    }
+                },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
             )
             supportFragmentManager.commitNow { replace(NAVIGATOR_CONTAINER_ID, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG) }
             navigator = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as EpubNavigatorFragment
             refreshDictionaryButton()
-            pagePositions = opened.positions()
             progressSlider.max = (pagePositions.size - 1).coerceAtLeast(1)
             compactProgressSlider.max = progressSlider.max
             contentsController.populate(document.title, opened.tableOfContents)
@@ -281,6 +289,26 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun submit(changes: EpubPreferences) {
         currentPreferences += changes
         if (::navigator.isInitialized) navigator.submitPreferences(currentPreferences)
+    }
+
+    private fun applyTopAnchoredContent() {
+        if (!::navigator.isInitialized) {
+            rootLayout.postDelayed(::applyTopAnchoredContent, 120)
+            return
+        }
+        lifecycleScope.launch {
+            navigator.evaluateJavascript(
+                """
+                (() => {
+                  const elements = [document.documentElement, document.body].filter(Boolean);
+                  elements.forEach(element => {
+                    element.style.setProperty('justify-content', 'flex-start', 'important');
+                    element.style.setProperty('align-content', 'start', 'important');
+                  });
+                })();
+                """.trimIndent()
+            )
+        }
     }
 
 
@@ -639,6 +667,13 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     override fun finish() {
+        if (::navigator.isInitialized && ::document.isInitialized) {
+            val locator = navigator.currentLocator.value
+            locator.locations.totalProgression?.let { progression ->
+                database.updateProgress(document.identifier, locator.locations.position ?: 0, progression.toFloat())
+            }
+            AutomaticDriveSyncScheduler(this).enqueueBookSync(document.identifier)
+        }
         ReaderResumeState.markReaderExited(this)
         super.finish()
     }

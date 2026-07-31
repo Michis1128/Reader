@@ -277,6 +277,13 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun deleteDictionaryEntry(identifier: Long) = synchronization.deleteEntity("dictionary_entries", "dictionary_entry", identifier)
 
+    fun deleteDictionaryCategory(identifier: Long) {
+        dictionaries.entries(identifier).forEach { entry ->
+            synchronization.deleteEntity("dictionary_entries", "dictionary_entry", entry.identifier)
+        }
+        synchronization.deleteEntity("dictionary_categories", "dictionary_category", identifier)
+    }
+
     fun documentsWithDictionaries() = dictionaries.documentsWithDictionaries()
 
     fun documentSyncMetadata(identifier: Long) = synchronization.metadata("documents", identifier)
