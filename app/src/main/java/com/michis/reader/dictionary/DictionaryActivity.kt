@@ -5,8 +5,10 @@ import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityDictionaryBinding
 import com.michis.reader.databinding.ItemDictionaryCategoryBinding
 import com.michis.reader.databinding.ItemDictionaryEntryBinding
+import com.michis.reader.databinding.ItemDictionarySelectionBinding
 import com.michis.reader.databinding.ViewDictionaryCategoryCreatorBinding
 import com.michis.reader.databinding.ViewDictionaryEntryEditorBinding
+import com.michis.reader.databinding.ViewDictionarySelectionActionsBinding
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
@@ -116,38 +118,56 @@ class DictionaryActivity : ComponentActivity() {
         selectedCategory = null; content.removeAllViews(); titleView.text = "Eliminar subcategorías"
         content.addView(message("Selecciona una o varias subcategorías. También se eliminarán todas las entradas que contienen."))
         val selected = linkedSetOf<Long>()
-        categories.forEach { category -> content.addView(CheckBox(this).apply {
-            text = category.name; setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnCheckedChangeListener { _, checked -> if (checked) selected += category.identifier else selected -= category.identifier }
-        }) }
-        content.addView(Button(this).apply {
-            text = "Eliminar seleccionadas"; isAllCaps = false; setOnClickListener {
+        categories.forEach { category ->
+            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
+            itemBinding.selectionCheckbox.apply {
+                text = category.name
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected += category.identifier else selected -= category.identifier
+                }
+            }
+            content.addView(itemBinding.root)
+        }
+        val actionsBinding = ViewDictionarySelectionActionsBinding.inflate(layoutInflater, content, false)
+        actionsBinding.deleteButton.apply {
+            text = "Eliminar seleccionadas"
+            setOnClickListener {
                 if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos una subcategoría", Toast.LENGTH_SHORT).show()
                 else confirmDeletion("Eliminar subcategorías", "Se eliminarán ${selected.size} subcategorías y sus elementos.") {
                     selected.forEach(database::deleteDictionaryCategory); showCategories()
                 }
             }
-        })
-        content.addView(Button(this).apply { text = "Cancelar"; isAllCaps = false; setOnClickListener { showCategories() } })
+        }
+        actionsBinding.cancelButton.setOnClickListener { showCategories() }
+        content.addView(actionsBinding.root)
     }
 
     private fun showEntrySelection(category: DictionaryCategory, entries: List<DictionaryEntry>) {
         selectedCategory = category; content.removeAllViews(); titleView.text = "Eliminar de ${category.name}"
         content.addView(message("Selecciona todas las palabras o frases que deseas eliminar."))
         val selected = linkedSetOf<Long>()
-        entries.forEach { entry -> content.addView(CheckBox(this).apply {
-            text = entry.term; setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnCheckedChangeListener { _, checked -> if (checked) selected += entry.identifier else selected -= entry.identifier }
-        }) }
-        content.addView(Button(this).apply {
-            text = "Eliminar seleccionados"; isAllCaps = false; setOnClickListener {
+        entries.forEach { entry ->
+            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
+            itemBinding.selectionCheckbox.apply {
+                text = entry.term
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected += entry.identifier else selected -= entry.identifier
+                }
+            }
+            content.addView(itemBinding.root)
+        }
+        val actionsBinding = ViewDictionarySelectionActionsBinding.inflate(layoutInflater, content, false)
+        actionsBinding.deleteButton.apply {
+            text = "Eliminar seleccionados"
+            setOnClickListener {
                 if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos un elemento", Toast.LENGTH_SHORT).show()
                 else confirmDeletion("Eliminar elementos", "Se eliminarán ${selected.size} elementos del diccionario.") {
                     selected.forEach(database::deleteDictionaryEntry); showEntries(category)
                 }
             }
-        })
-        content.addView(Button(this).apply { text = "Cancelar"; isAllCaps = false; setOnClickListener { showEntries(category) } })
+        }
+        actionsBinding.cancelButton.setOnClickListener { showEntries(category) }
+        content.addView(actionsBinding.root)
     }
 
     private fun confirmDeletion(title: String, message: String, action: () -> Unit) {
