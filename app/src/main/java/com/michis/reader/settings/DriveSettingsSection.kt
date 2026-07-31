@@ -1,25 +1,22 @@
 package com.michis.reader.settings
 
-import com.michis.reader.R
+import com.michis.reader.databinding.ViewAutomaticSyncControlsBinding
+import com.michis.reader.databinding.ViewDriveSettingsPanelBinding
+import com.michis.reader.databinding.ViewGoogleAccountHeaderBinding
 import com.michis.reader.sync.*
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
-import com.michis.reader.ui.LimitedHeightSpinner
 
 import android.app.Activity
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -69,9 +66,10 @@ class DriveSettingsSection(
         callback?.invoke(authorization)
     }
 
-    fun createPanel(): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
-        render(this)
+    fun createPanel(): View {
+        val binding = ViewDriveSettingsPanelBinding.inflate(activity.layoutInflater)
+        render(binding.panelContainer)
+        return binding.root
     }
 
     private fun render(container: LinearLayout) {
@@ -215,26 +213,13 @@ class DriveSettingsSection(
         })
     }
 
-    private fun accountHeader(session: GoogleAccountSession) = LinearLayout(activity).apply {
-        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(10))
-        val picture = ImageView(activity).apply {
-            contentDescription = "Foto de perfil de Google"; scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(android.R.drawable.ic_menu_myplaces)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL; setColor(AppThemePalette.current(activity).card)
-            }
-            clipToOutline = true
-        }
-        addView(picture, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(12) })
-        addView(LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(activity).apply {
-                text = session.displayName.ifBlank { "Cuenta de Google" }; textSize = 18f
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            })
-            addView(TextView(activity).apply { text = session.accountIdentifier; setPadding(0, dp(3), 0, 0) })
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        loadProfilePicture(picture, session.profilePictureUri)
+    private fun accountHeader(session: GoogleAccountSession): View {
+        val binding = ViewGoogleAccountHeaderBinding.inflate(activity.layoutInflater)
+        binding.displayName.text = session.displayName.ifBlank { "Cuenta de Google" }
+        binding.accountIdentifier.text = session.accountIdentifier
+        binding.profilePicture.background = AppThemePalette.cardBackground(activity, 26f)
+        loadProfilePicture(binding.profilePicture, session.profilePictureUri)
+        return binding.root
     }
 
     private fun requestAuthorization(
@@ -348,17 +333,15 @@ class DriveSettingsSection(
         }
     }
 
-    private fun automaticSyncControls(): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
+    private fun automaticSyncControls(): View {
+        val binding = ViewAutomaticSyncControlsBinding.inflate(activity.layoutInflater)
         val scheduler = AutomaticDriveSyncScheduler(activity)
-        addView(fieldTitle("Sincronización automática"))
-        addView(Switch(activity).apply {
-            text = "Sincronizar cuando haya conexión"; isChecked = scheduler.isEnabled()
+        binding.automaticSyncSwitch.apply {
+            isChecked = scheduler.isEnabled()
             setOnCheckedChangeListener { _, enabled -> scheduler.setEnabled(enabled) }
-        })
-        addView(fieldTitle("Frecuencia"))
+        }
         val intervals = listOf(15L, 60L, 360L, 1_440L)
-        addView(LimitedHeightSpinner(activity).apply {
+        binding.frequencySpinner.apply {
             adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
                 listOf("Cada 15 minutos", "Cada hora", "Cada 6 horas", "Cada 24 horas"))
             setSelection(intervals.indexOf(scheduler.intervalMinutes()).coerceAtLeast(0))
@@ -368,13 +351,13 @@ class DriveSettingsSection(
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        })
-        addView(fieldTitle("Tipo de conexión"))
-        addView(Switch(activity).apply {
-            text = "Sincronizar solo con Wi-Fi"; isChecked = scheduler.wifiOnly()
+        }
+        binding.wifiOnlySwitch.apply {
+            isChecked = scheduler.wifiOnly()
             setOnCheckedChangeListener { _, checked -> scheduler.setWifiOnly(checked) }
-        })
-        addView(description("Último estado: ${scheduler.lastStatus()}"))
+        }
+        binding.lastStatusText.text = "Último estado: ${scheduler.lastStatus()}"
+        return binding.root
     }
 
     private fun loadProfilePicture(target: ImageView, value: String) {
@@ -391,11 +374,6 @@ class DriveSettingsSection(
             }
             if (bitmap != null && target.isAttachedToWindow) target.setImageBitmap(bitmap)
         }
-    }
-
-    private fun fieldTitle(value: String) = TextView(activity).apply {
-        text = value; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setPadding(dp(2), dp(10), dp(2), dp(5))
     }
 
     private fun description(value: String) = TextView(activity).apply {
