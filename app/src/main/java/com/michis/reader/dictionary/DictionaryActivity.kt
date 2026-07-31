@@ -2,6 +2,7 @@ package com.michis.reader.dictionary
 
 import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ActivityDictionaryBinding
 import com.michis.reader.databinding.ItemDictionaryCategoryBinding
 import com.michis.reader.databinding.ItemDictionaryEntryBinding
 import com.michis.reader.settings.ReaderSettingsRepository
@@ -13,13 +14,13 @@ import android.app.AlertDialog
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 
 class DictionaryActivity : ComponentActivity() {
+    private lateinit var binding: ActivityDictionaryBinding
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
     private lateinit var titleView: TextView
@@ -35,24 +36,20 @@ class DictionaryActivity : ComponentActivity() {
         })
         database = ReaderDatabase.getInstance(this)
         document = database.findDocument(intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1)) ?: run { finish(); return }
-        setContentView(buildScreen()); AppThemePalette.apply(this)
+        binding = ActivityDictionaryBinding.inflate(layoutInflater)
+        AppThemePalette.markBackground(binding.rootContainer)
+        ScreenHeader.configure(this, binding.screenHeader, "") { navigateBack() }
+        titleView = binding.screenHeader.titleText
+        content = binding.contentContainer
+        applyInsets(binding.rootContainer)
+        setContentView(binding.root)
+        AppThemePalette.apply(this)
         val requestedEntry = database.findDictionaryEntry(intent.getLongExtra(EXTRA_ENTRY_IDENTIFIER, -1))
             ?.takeIf { it.documentIdentifier in database.effectiveDictionaryOwnerIdentifiers(document.identifier) }
         val requestedCategory = requestedEntry?.let { entry ->
             database.dictionaryCategories(entry.documentIdentifier).firstOrNull { it.identifier == entry.categoryIdentifier }
         }
         if (requestedEntry != null && requestedCategory != null) showEntryEditor(requestedCategory, requestedEntry) else showCategories()
-    }
-
-    private fun buildScreen(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(16)); AppThemePalette.markBackground(this)
-        val header = ScreenHeader.create(this@DictionaryActivity, "") { navigateBack() }
-        titleView = header.titleText
-        addView(header.root)
-        val scroll = ScrollView(context)
-        content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(content); addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        applyInsets(this)
     }
 
     private fun showCategories() {
