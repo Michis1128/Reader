@@ -67,8 +67,9 @@ class DictionaryActivity : ComponentActivity() {
             "Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer; después podrás escribir su descripción ahora o dejarla pendiente."
         ).apply { setBackgroundResource(R.drawable.rounded_panel) })
         content.addView(sectionTitle("Subcategorías"))
-        content.addView(actionButton("Compartir este diccionario con otros libros") { showSharingOptions() })
         val categories = database.dictionaryCategories(document.identifier)
+        content.addView(categoryCreator())
+        content.addView(actionButton("Compartir este diccionario con otros libros") { showSharingOptions() })
         if (categories.isNotEmpty() && pendingTerm.isBlank()) {
             content.addView(actionButton("Seleccionar subcategorías para eliminar") {
                 showCategorySelection(categories)
@@ -80,6 +81,9 @@ class DictionaryActivity : ComponentActivity() {
             })
         }
         if (categories.isEmpty()) content.addView(message("Este libro todavía no tiene subcategorías. Crea la primera, por ejemplo: Personajes, Palabras o Lugares."))
+    }
+
+    private fun categoryCreator(): View {
         val creatorBinding = ViewDictionaryCategoryCreatorBinding.inflate(layoutInflater, content, false)
         creatorBinding.createCategoryButton.setOnClickListener {
             val identifier = database.createDictionaryCategory(
@@ -94,7 +98,7 @@ class DictionaryActivity : ComponentActivity() {
                 if (pendingTerm.isBlank()) showEntries(created) else showEntryEditor(created, null)
             }
         }
-        content.addView(creatorBinding.root)
+        return creatorBinding.root
     }
 
     private fun showEntries(category: DictionaryCategory) {
