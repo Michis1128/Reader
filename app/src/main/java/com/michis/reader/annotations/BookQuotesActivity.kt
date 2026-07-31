@@ -87,13 +87,13 @@ class BookQuotesActivity : ComponentActivity() {
             binding.pageText.text = "Página ${quote.pageNumber.coerceAtLeast(1)}"
             binding.actionContainer.visibility = if (selectionMode) View.GONE else View.VISIBLE
             binding.openButton.setOnClickListener { openQuote(quote) }
-            binding.colorButton.setOnClickListener { editColor(quote) }
+            binding.colorButton.setOnClickListener { editQuote(quote) }
             binding.deleteButton.setOnClickListener { database.deleteAnnotation(quote.identifier); render() }
             binding.root.setOnClickListener {
                 if (selectionMode) {
                     if (!selectedQuoteIdentifiers.add(quote.identifier)) selectedQuoteIdentifiers.remove(quote.identifier)
                     updateSelectionControls(); render()
-                } else openQuote(quote)
+                } else editQuote(quote)
             }
             AppThemePalette.markCard(binding.root)
             content.addView(binding.root)
@@ -122,11 +122,14 @@ class BookQuotesActivity : ComponentActivity() {
             }.show()
     }
 
-    private fun editColor(quote: SavedAnnotation) {
-        KvColorPickerOverlay.show(this, quote.color) { selectedColor ->
-            database.updateAnnotationColor(quote.identifier, selectedColor)
-            render()
-        }
+    private fun editQuote(quote: SavedAnnotation) {
+        startActivity(Intent(this, QuoteColorActivity::class.java)
+            .putExtra(QuoteColorActivity.EXTRA_QUOTE_IDENTIFIER, quote.identifier))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::content.isInitialized) render()
     }
 
     private fun openQuote(quote: SavedAnnotation) {

@@ -18,38 +18,49 @@ class QuoteColorActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selectedColor = runCatching {
+        val database = ReaderDatabase.getInstance(this)
+        val quoteIdentifier = intent.getLongExtra(EXTRA_QUOTE_IDENTIFIER, -1)
+        val existingQuote = database.annotations().firstOrNull {
+            it.identifier == quoteIdentifier && it.kind == "cita"
+        }
+        selectedColor = existingQuote?.color ?: runCatching {
             val settings = ReaderSettingsRepository.get(this)
             Color.parseColor(settings.preferences.getString(
                 ReaderSettingsRepository.KEY_QUOTE_DEFAULT_COLOR,
                 ReaderSettingsRepository.DEFAULT_QUOTE_COLOR
             ))
         }.getOrDefault(Color.rgb(255, 213, 79))
-        val selectedText = intent.getStringExtra(EXTRA_TEXT).orEmpty().trim()
+        val selectedText = existingQuote?.selectedText ?: intent.getStringExtra(EXTRA_TEXT).orEmpty().trim()
         if (selectedText.isBlank()) { finish(); return }
         val binding = ActivityQuoteColorBinding.inflate(layoutInflater)
         AppThemePalette.markBackground(binding.rootContainer)
-        ScreenHeader.configure(this, binding.screenHeader, "Nueva cita") { finish() }
+        ScreenHeader.configure(this, binding.screenHeader, if (existingQuote == null) "Nueva cita" else "Editar cita") { finish() }
         binding.selectedText.text = selectedText
+        binding.noteInput.setText(existingQuote?.note.orEmpty())
+        binding.saveQuoteButton.text = if (existingQuote == null) "Aplicar color y guardar cita" else "Guardar cambios"
         updateColorPreview(binding)
         binding.colorPreview.setOnClickListener { showColorPicker(binding) }
         binding.saveQuoteButton.setOnClickListener {
-            ReaderDatabase.getInstance(this).addAnnotation(
-                intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1),
-                "cita",
-                selectedText,
-                binding.noteInput.text.toString(),
-                selectedColor,
-                intent.getIntExtra(EXTRA_LOCATION, 0),
-                intent.getIntExtra(EXTRA_PAGE_NUMBER, 0)
-            )
-            Toast.makeText(this, "Cita guardada", Toast.LENGTH_SHORT).show()
+            if (existingQuote == null) {
+                database.addAnnotation(
+                    intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1),
+                    "cita",
+                    selectedText,
+                    binding.noteInput.text.toString(),
+                    selectedColor,
+                    intent.getIntExtra(EXTRA_LOCATION, 0),
+                    intent.getIntExtra(EXTRA_PAGE_NUMBER, 0)
+                )
+            } else {
+                database.updateQuote(existingQuote.identifier, binding.noteInput.text.toString(), selectedColor)
+            }
+            Toast.makeText(this, if (existingQuote == null) "Cita guardada" else "Cita actualizada", Toast.LENGTH_SHORT).show()
             finish()
         }
         applyInsets(binding.rootContainer)
         setContentView(binding.root)
         AppThemePalette.apply(this)
-        showColorPicker(binding)
+        if (existingQuote == null) showColorPicker(binding)
     }
 
     private fun showColorPicker(binding: ActivityQuoteColorBinding) {
@@ -79,5 +90,6 @@ class QuoteColorActivity : ComponentActivity() {
         const val EXTRA_TEXT = "selected_text"
         const val EXTRA_LOCATION = "location"
         const val EXTRA_PAGE_NUMBER = "page_number"
+        const val EXTRA_QUOTE_IDENTIFIER = "quote_identifier"
     }
 }

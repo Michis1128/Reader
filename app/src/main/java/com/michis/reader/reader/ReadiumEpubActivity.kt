@@ -89,11 +89,20 @@ class ReadiumEpubActivity : FragmentActivity() {
         database = ReaderDatabase.getInstance(this)
         spenRemoteController = SpenRemoteController(this, ::executeSpenGesture)
         document = database.findDocument(intent.getLongExtra("document_identifier", -1)) ?: run { finish(); return }
-        decorationController = EpubDecorationController(database, document.identifier, readerSettings) { entryIdentifier ->
-            launchReaderMenu(Intent(this, DictionaryActivity::class.java)
-                .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
-                .putExtra(DictionaryActivity.EXTRA_ENTRY_IDENTIFIER, entryIdentifier))
-        }
+        decorationController = EpubDecorationController(
+            database,
+            document.identifier,
+            readerSettings,
+            openDictionaryEntry = { entryIdentifier ->
+                launchReaderMenu(Intent(this, DictionaryActivity::class.java)
+                    .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
+                    .putExtra(DictionaryActivity.EXTRA_ENTRY_IDENTIFIER, entryIdentifier))
+            },
+            editQuote = { quoteIdentifier ->
+                launchReaderMenu(Intent(this, QuoteColorActivity::class.java)
+                    .putExtra(QuoteColorActivity.EXTRA_QUOTE_IDENTIFIER, quoteIdentifier))
+            }
+        )
         setContentView(buildScreen())
         applyInitialVisualTheme()
         configureReaderScreenTimeout()
@@ -578,7 +587,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                     (event.x < resources.displayMetrics.widthPixels * .25f || event.x > resources.displayMetrics.widthPixels * .75f)) {
                     val direction = if (event.x < resources.displayMetrics.widthPixels * .25f) -1 else 1
                     rootLayout.postDelayed({
-                        if (android.os.SystemClock.uptimeMillis() - decorationController.lastDictionaryActivationAt > 300) {
+                        if (android.os.SystemClock.uptimeMillis() - decorationController.lastDecorationActivationAt > 300) {
                             if (::navigator.isInitialized) navigator.clearSelection()
                             navigateOnePage(direction)
                         }
@@ -589,7 +598,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                     event.y in resources.displayMetrics.heightPixels * .25f..resources.displayMetrics.heightPixels * .75f) {
                     if (closedAnOpenPanel) return true
                     rootLayout.postDelayed({
-                        if (android.os.SystemClock.uptimeMillis() - decorationController.lastDictionaryActivationAt > 300) toggleControls()
+                        if (android.os.SystemClock.uptimeMillis() - decorationController.lastDecorationActivationAt > 300) toggleControls()
                     }, 90)
                 } else if (closedAnOpenPanel) return true
             }

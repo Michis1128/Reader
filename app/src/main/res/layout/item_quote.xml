@@ -54,7 +54,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing_small"
             android:layout_weight="1"
-            android:text="Color" />
+            android:text="Editar" />
 
         <Button
             android:id="@+id/deleteButton"
