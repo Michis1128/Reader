@@ -6,6 +6,8 @@ import com.michis.reader.R
 import com.michis.reader.annotations.*
 import com.michis.reader.app.ReaderResumeState
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ViewEpubBottomControlsBinding
+import com.michis.reader.databinding.ViewEpubTopControlsBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
@@ -20,7 +22,6 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.Rect
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -100,9 +101,9 @@ class ReadiumEpubActivity : FragmentActivity() {
         rootLayout = this
         setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
         addView(FrameLayout(context).apply { id = NAVIGATOR_CONTAINER_ID }, FrameLayout.LayoutParams(-1, -1))
-        topControls = buildTopControls()
+        topControls = inflateTopControls()
         addView(topControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
-        bottomControls = buildBottomControls()
+        bottomControls = inflateBottomControls()
         addView(bottomControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
         compactProgressSlider = buildCompactProgressSlider().apply { visibility = View.GONE }
         addView(compactProgressSlider, FrameLayout.LayoutParams(-1, dp(28), Gravity.BOTTOM).apply {
@@ -115,17 +116,15 @@ class ReadiumEpubActivity : FragmentActivity() {
         applySafeSystemBarPadding(this)
     }
 
-    private fun buildTopControls() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(6), dp(5), dp(6), dp(5))
-        setBackgroundColor(AppThemePalette.forReader(this@ReadiumEpubActivity, readerSettings.theme).surface)
-        addView(controlButton("‹") { finish() })
-        addView(TextView(context).apply {
-            text = document.title; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; maxLines = 1; gravity = Gravity.CENTER_VERTICAL
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        addView(controlButton("🔧") { showEpubMoreMenu() }.apply { contentDescription = "Herramientas" })
-        dictionaryButton = controlButton("Diccionario") { openDictionary() }.apply { visibility = View.GONE }
-        addView(controlButton("Aa") { toggleSettingsPanel() }.apply { contentDescription = "Ajustes de lectura" })
+    private fun inflateTopControls(): LinearLayout {
+        val binding = ViewEpubTopControlsBinding.inflate(layoutInflater)
+        binding.documentTitle.text = document.title
+        binding.backButton.setOnClickListener { finish() }
+        binding.toolsButton.setOnClickListener { showEpubMoreMenu() }
+        dictionaryButton = binding.dictionaryButton.apply { setOnClickListener { openDictionary() } }
+        binding.readingSettingsButton.setOnClickListener { toggleSettingsPanel() }
+        binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
+        return binding.root
     }
 
     private fun showEpubMoreMenu() {
@@ -140,27 +139,25 @@ class ReadiumEpubActivity : FragmentActivity() {
         }.show()
     }
 
-    private fun buildBottomControls() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(5), dp(14), dp(7))
-        setBackgroundColor(AppThemePalette.forReader(this@ReadiumEpubActivity, readerSettings.theme).surface)
-        progressLabel = TextView(context).apply { text = "Abriendo EPUB…"; gravity = Gravity.CENTER }
-        addView(progressLabel, LinearLayout.LayoutParams(-1, dp(28)))
-        progressSlider = SeekBar(context).apply {
-            max = 1
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onStartTrackingTouch(seekBar: SeekBar) { userIsDraggingProgress = true }
-                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        progressLabel.text = "Página ${progress + 1} de ${pagePositions.size.coerceAtLeast(1)}"
-                        navigateToPage(progress, animated = false)
-                    }
+    private fun inflateBottomControls(): LinearLayout {
+        val binding = ViewEpubBottomControlsBinding.inflate(layoutInflater)
+        progressLabel = binding.progressLabel
+        progressSlider = binding.progressSlider
+        progressSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onStartTrackingTouch(seekBar: SeekBar) { userIsDraggingProgress = true }
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    progressLabel.text = "Página ${progress + 1} de ${pagePositions.size.coerceAtLeast(1)}"
+                    navigateToPage(progress, animated = false)
                 }
-                override fun onStopTrackingTouch(seekBar: SeekBar) {
-                    userIsDraggingProgress = false; navigateToPage(seekBar.progress)
-                }
-            })
-        }
-        addView(progressSlider, LinearLayout.LayoutParams(-1, dp(36)))
+            }
+            override fun onStopTrackingTouch(seekBar: SeekBar) {
+                userIsDraggingProgress = false
+                navigateToPage(seekBar.progress)
+            }
+        })
+        binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
+        return binding.root
     }
 
     private fun buildCompactProgressSlider() = SeekBar(this).apply {
@@ -740,10 +737,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         return true
     }
 
-
-    private fun controlButton(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; minWidth = 0; setOnClickListener { action() }
-    }
 
     @Suppress("DEPRECATION")
     private fun configureEdgeToEdgeWindow() {
