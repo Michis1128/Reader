@@ -6,6 +6,7 @@ import com.michis.reader.R
 import com.michis.reader.annotations.*
 import com.michis.reader.app.ReaderResumeState
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ActivityReadiumEpubBinding
 import com.michis.reader.databinding.ViewEpubBottomControlsBinding
 import com.michis.reader.databinding.ViewEpubTopControlsBinding
 import com.michis.reader.dictionary.DictionaryActivity
@@ -52,6 +53,7 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 class ReadiumEpubActivity : FragmentActivity() {
+    private lateinit var screenBinding: ActivityReadiumEpubBinding
     private val readerSettings by lazy { ReaderSettingsRepository.get(this) }
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
@@ -97,27 +99,30 @@ class ReadiumEpubActivity : FragmentActivity() {
         openWithReadium()
     }
 
-    private fun buildScreen(): View = FrameLayout(this).apply {
-        rootLayout = this
-        setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
-        addView(FrameLayout(context).apply { id = NAVIGATOR_CONTAINER_ID }, FrameLayout.LayoutParams(-1, -1))
-        topControls = inflateTopControls()
-        addView(topControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
-        bottomControls = inflateBottomControls()
-        addView(bottomControls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-        compactProgressSlider = buildCompactProgressSlider().apply { visibility = View.GONE }
-        addView(compactProgressSlider, FrameLayout.LayoutParams(-1, dp(28), Gravity.BOTTOM).apply {
-            marginStart = dp(20); marginEnd = dp(20); bottomMargin = dp(8)
-        })
-        settingsPanel = buildSettingsPanel().apply { visibility = View.GONE }
-        addView(settingsPanel, FrameLayout.LayoutParams(dp(340), -1, Gravity.END))
-        contentsPanel = buildContentsPanel().apply { visibility = View.GONE }
-        addView(contentsPanel, FrameLayout.LayoutParams((resources.displayMetrics.widthPixels * .88f).toInt(), -1, Gravity.START))
-        applySafeSystemBarPadding(this)
+    private fun buildScreen(): View {
+        screenBinding = ActivityReadiumEpubBinding.inflate(layoutInflater)
+        rootLayout = screenBinding.rootLayout
+        rootLayout.setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
+        topControls = configureTopControls(screenBinding.screenTopControls)
+        bottomControls = configureBottomControls(screenBinding.screenBottomControls)
+        compactProgressSlider = screenBinding.compactProgressSlider
+        configureCompactProgressSlider()
+        settingsPanel = screenBinding.settingsPanelHost.apply {
+            addView(buildSettingsPanel(), FrameLayout.LayoutParams(-1, -1))
+            visibility = View.GONE
+        }
+        contentsPanel = screenBinding.contentsPanelHost.apply {
+            layoutParams = (layoutParams as FrameLayout.LayoutParams).apply {
+                width = (resources.displayMetrics.widthPixels * .88f).toInt()
+            }
+            addView(buildContentsPanel(), FrameLayout.LayoutParams(-1, -1))
+            visibility = View.GONE
+        }
+        applySafeSystemBarPadding(rootLayout)
+        return rootLayout
     }
 
-    private fun inflateTopControls(): LinearLayout {
-        val binding = ViewEpubTopControlsBinding.inflate(layoutInflater)
+    private fun configureTopControls(binding: ViewEpubTopControlsBinding): LinearLayout {
         binding.documentTitle.text = document.title
         binding.backButton.setOnClickListener { finish() }
         binding.toolsButton.setOnClickListener { showEpubMoreMenu() }
@@ -139,8 +144,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         }.show()
     }
 
-    private fun inflateBottomControls(): LinearLayout {
-        val binding = ViewEpubBottomControlsBinding.inflate(layoutInflater)
+    private fun configureBottomControls(binding: ViewEpubBottomControlsBinding): LinearLayout {
         progressLabel = binding.progressLabel
         progressSlider = binding.progressSlider
         progressSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -160,11 +164,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         return binding.root
     }
 
-    private fun buildCompactProgressSlider() = SeekBar(this).apply {
-        max = 1
-        alpha = .76f
-        contentDescription = "Desplazarse por el libro"
-        setPadding(dp(4), 0, dp(4), 0)
+    private fun configureCompactProgressSlider() = compactProgressSlider.apply {
         setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seekBar: SeekBar) {
                 userIsDraggingProgress = true
@@ -227,7 +227,9 @@ class ReadiumEpubActivity : FragmentActivity() {
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
             )
-            supportFragmentManager.commitNow { replace(NAVIGATOR_CONTAINER_ID, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG) }
+            supportFragmentManager.commitNow {
+                replace(screenBinding.navigatorContainer.id, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG)
+            }
             navigator = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as EpubNavigatorFragment
             refreshDictionaryButton()
             progressSlider.max = (pagePositions.size - 1).coerceAtLeast(1)
@@ -767,7 +769,6 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     companion object {
         private const val NAVIGATOR_TAG = "readium_epub_navigator"
-        private const val NAVIGATOR_CONTAINER_ID = 0x4217
         private const val ACTION_ADD_QUOTE = 0x4220
         private const val ACTION_ADD_DICTIONARY = 0x4221
         private const val ACTION_COPY = 0x4222
