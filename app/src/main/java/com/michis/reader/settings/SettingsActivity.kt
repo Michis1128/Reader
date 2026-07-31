@@ -5,6 +5,9 @@ import com.michis.reader.databinding.ViewSettingsSectionBinding
 import com.michis.reader.databinding.ViewSettingsFieldBinding
 import com.michis.reader.databinding.ActivitySettingsBinding
 import com.michis.reader.databinding.ViewHexColorEditorBinding
+import com.michis.reader.databinding.ViewSettingsActionBinding
+import com.michis.reader.databinding.ViewSettingsDescriptionBinding
+import com.michis.reader.databinding.ViewSettingsToggleBinding
 import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
@@ -91,8 +94,8 @@ class SettingsActivity : ComponentActivity() {
         addView(settingsSection("Marcadores") {
             addView(description("Personaliza cómo se identifican los puntos guardados dentro de cada libro."))
             addView(settingsField("Color de marcador", hexColorEditor("bookmark_color", "#FF8D6E63")))
-            addView(Switch(context).apply {
-                text = "Permitir marcador tocando la esquina"; isChecked = readerSettings.preferences.getBoolean("corner_bookmark_enabled", true)
+            addView(settingsToggle("Permitir marcador tocando la esquina") {
+                isChecked = readerSettings.preferences.getBoolean("corner_bookmark_enabled", true)
                 setOnCheckedChangeListener { _, checked -> readerSettings.preferences.edit().putBoolean("corner_bookmark_enabled", checked).apply() }
             })
         })
@@ -101,17 +104,17 @@ class SettingsActivity : ComponentActivity() {
             SpenControlPreferences.gestures.forEach { gesture ->
                 addView(settingsField(gesture.label, spenActionSpinner(gesture)))
             }
-            addView(Button(context).apply {
-                text = "Restaurar comandos predeterminados"; isAllCaps = false
+            addView(settingsAction("Restaurar comandos predeterminados") {
                 setOnClickListener { restoreDefaultSpenActions(); Toast.makeText(context, "Comandos restaurados", Toast.LENGTH_SHORT).show(); recreate() }
             })
-            val result = TextView(context).apply { text = "Diagnóstico todavía no ejecutado"; setPadding(dp(12), dp(10), dp(12), dp(10)) }
-            addView(Button(context).apply { text = "Comprobar compatibilidad del S Pen"; isAllCaps = false; setOnClickListener { diagnoseSpen(result) } })
+            val result = description("Diagnóstico todavía no ejecutado")
+            addView(settingsAction("Comprobar compatibilidad del S Pen") {
+                setOnClickListener { diagnoseSpen(result) }
+            })
             addView(result)
         })
         addView(settingsSection("Almacenamiento y privacidad") {
-            addView(Button(context).apply {
-                text = "Reiniciar libros…"; isAllCaps = false
+            addView(settingsAction("Reiniciar libros…") {
                 setOnClickListener { startActivity(Intent(this@SettingsActivity, ResetBooksActivity::class.java)) }
             })
             addView(description("Los libros EPUB permanecen en el dispositivo. La aplicación no envía archivos ni incluye telemetría."))
@@ -305,9 +308,23 @@ class SettingsActivity : ComponentActivity() {
         binding.controlContainer.addView(control, FrameLayout.LayoutParams(-1, -2))
         return binding.root
     }
-    private fun description(value: String) = TextView(this).apply {
-        text = value; setTextColor(Color.DKGRAY); setPadding(dp(2), dp(4), dp(2), dp(7))
+    private fun settingsAction(value: String, configure: Button.() -> Unit): View {
+        val binding = ViewSettingsActionBinding.inflate(layoutInflater)
+        binding.actionButton.text = value
+        binding.actionButton.configure()
+        return binding.root
     }
+
+    private fun settingsToggle(value: String, configure: Switch.() -> Unit): View {
+        val binding = ViewSettingsToggleBinding.inflate(layoutInflater)
+        binding.toggleSwitch.text = value
+        binding.toggleSwitch.configure()
+        return binding.root
+    }
+
+    private fun description(value: String) =
+        ViewSettingsDescriptionBinding.inflate(layoutInflater).root.apply { text = value }
+
     private fun applyInsets(view: View) {
         val originalLeft = view.paddingLeft; val originalTop = view.paddingTop
         val originalRight = view.paddingRight; val originalBottom = view.paddingBottom

@@ -3,6 +3,8 @@ package com.michis.reader.settings
 import com.michis.reader.databinding.ViewAutomaticSyncControlsBinding
 import com.michis.reader.databinding.ViewDriveSettingsPanelBinding
 import com.michis.reader.databinding.ViewGoogleAccountHeaderBinding
+import com.michis.reader.databinding.ViewSettingsActionBinding
+import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.sync.*
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
@@ -17,7 +19,6 @@ import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.IntentSenderRequest
@@ -78,8 +79,7 @@ class DriveSettingsSection(
         val session = accountManager.currentSession()
         if (session == null) {
             container.addView(description("La lectura local no requiere una cuenta. Google se utilizará únicamente si decides activar la sincronización."))
-            container.addView(Button(activity).apply {
-                text = "Iniciar sesión con Google"; isAllCaps = false
+            container.addView(actionButton("Iniciar sesión con Google") {
                 setOnClickListener {
                     isEnabled = false
                     activity.lifecycleScope.launch {
@@ -123,9 +123,9 @@ class DriveSettingsSection(
                 container.addView(description("Carpeta vinculada: ${savedFolder.name}"))
                 lastFullSyncText?.let { container.addView(description(it)) }
             }
-            if (advancedMode || savedFolder == null) container.addView(Button(activity).apply {
-                text = if (savedFolder == null) "Preparar carpeta Michis Reader" else "Verificar carpeta Michis Reader"
-                isAllCaps = false
+            if (advancedMode || savedFolder == null) container.addView(actionButton(
+                if (savedFolder == null) "Preparar carpeta Michis Reader" else "Verificar carpeta Michis Reader"
+            ) {
                 setOnClickListener {
                     isEnabled = false
                     prepareFolder(session, authorizationManager, folderRepository, container, this)
@@ -137,9 +137,9 @@ class DriveSettingsSection(
                 if (selectedSources.isEmpty()) "Todavía no has elegido libros o carpetas de Drive."
                 else "Biblioteca de Drive: ${selectedSources.size} elementos seleccionados"
             ))
-            container.addView(Button(activity).apply {
-                text = if (selectedSources.isEmpty()) "Elegir libros y carpetas" else "Editar libros y carpetas"
-                isAllCaps = false
+            container.addView(actionButton(
+                if (selectedSources.isEmpty()) "Elegir libros y carpetas" else "Editar libros y carpetas"
+            ) {
                 setOnClickListener {
                     isEnabled = false
                     chooseLibrarySources(session, authorizationManager, container, this)
@@ -149,13 +149,12 @@ class DriveSettingsSection(
                 if (advancedMode && fullSyncConfirmationArmed) container.addView(description(
                     "Se descargarán y fusionarán los datos más recientes, se aplicarán eliminaciones válidas y después se subirá el resultado combinado."
                 ))
-                container.addView(Button(activity).apply {
-                    text = when {
+                container.addView(actionButton(when {
                         fullSyncInProgress -> "Sincronizando…"
                         advancedMode && fullSyncConfirmationArmed -> "Confirmar sincronización"
                         else -> "Sincronizar ahora"
-                    }
-                    isAllCaps = false; isEnabled = !fullSyncInProgress
+                    }) {
+                    isEnabled = !fullSyncInProgress
                     setOnClickListener {
                         if (advancedMode && !fullSyncConfirmationArmed) {
                             fullSyncConfirmationArmed = true
@@ -168,8 +167,7 @@ class DriveSettingsSection(
                 })
                 container.addView(automaticSyncControls())
             }
-            if (advancedMode) container.addView(Button(activity).apply {
-                text = "Revocar acceso a Google Drive"; isAllCaps = false
+            if (advancedMode) container.addView(actionButton("Revocar acceso a Google Drive") {
                 setOnClickListener {
                     isEnabled = false
                     authorizationManager.authorizationClient
@@ -188,16 +186,14 @@ class DriveSettingsSection(
             })
         } else {
             container.addView(description("Google Drive todavía no está autorizado. El permiso permite leer la biblioteca EPUB que elijas y mantener sincronizados sus libros."))
-            container.addView(Button(activity).apply {
-                text = "Activar sincronización con Drive"; isAllCaps = false
+            container.addView(actionButton("Activar sincronización con Drive") {
                 setOnClickListener {
                     isEnabled = false
                     requestAuthorization(session, authorizationManager, container, this)
                 }
             })
         }
-        container.addView(Button(activity).apply {
-            text = "Cerrar sesión"; isAllCaps = false
+        container.addView(actionButton("Cerrar sesión") {
             setOnClickListener {
                 isEnabled = false
                 activity.lifecycleScope.launch {
@@ -208,8 +204,8 @@ class DriveSettingsSection(
                 }
             }
         })
-        if (!advancedMode) container.addView(Button(activity).apply {
-            text = "Ajustes avanzados de Drive"; isAllCaps = false; setOnClickListener { openAdvancedSettings() }
+        if (!advancedMode) container.addView(actionButton("Ajustes avanzados de Drive") {
+            setOnClickListener { openAdvancedSettings() }
         })
     }
 
@@ -376,9 +372,13 @@ class DriveSettingsSection(
         }
     }
 
-    private fun description(value: String) = TextView(activity).apply {
-        text = value; setPadding(dp(2), dp(4), dp(2), dp(7))
+    private fun actionButton(value: String, configure: Button.() -> Unit): View {
+        val binding = ViewSettingsActionBinding.inflate(activity.layoutInflater)
+        binding.actionButton.text = value
+        binding.actionButton.configure()
+        return binding.root
     }
 
-    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+    private fun description(value: String) =
+        ViewSettingsDescriptionBinding.inflate(activity.layoutInflater).root.apply { text = value }
 }
