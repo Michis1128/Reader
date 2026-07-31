@@ -1,7 +1,7 @@
 package com.michis.reader.annotations
 
-import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ActivityBookQuotesBinding
 import com.michis.reader.databinding.ItemQuoteBinding
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.theme.*
@@ -9,19 +9,17 @@ import com.michis.reader.ui.ScreenHeader
 
 import android.content.Intent
 import android.app.AlertDialog
-import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 
 class BookQuotesActivity : ComponentActivity() {
+    private lateinit var binding: ActivityBookQuotesBinding
     private lateinit var database: ReaderDatabase
     private var documentIdentifier = -1L
     private lateinit var content: LinearLayout
@@ -33,19 +31,20 @@ class BookQuotesActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); database = ReaderDatabase.getInstance(this)
         documentIdentifier = intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(18)) }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; AppThemePalette.markBackground(this)
-            addView(fixedHeader())
-            addView(ScrollView(context).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
-            applyInsets(this)
-        }
-        setContentView(root); render(); AppThemePalette.apply(this)
+        binding = ActivityBookQuotesBinding.inflate(layoutInflater)
+        content = binding.contentContainer
+        AppThemePalette.markBackground(binding.rootContainer)
+        configureHeader()
+        applyInsets(binding.rootContainer)
+        setContentView(binding.root)
+        render()
+        AppThemePalette.apply(this)
     }
 
-    private fun fixedHeader(): View {
-        val header = ScreenHeader.create(
+    private fun configureHeader() {
+        ScreenHeader.configure(
             this,
+            binding.screenHeader,
             "Citas · ${database.findDocument(documentIdentifier)?.title.orEmpty()}"
         ) { finish() }
         selectionButton = Button(this).apply {
@@ -58,9 +57,8 @@ class BookQuotesActivity : ComponentActivity() {
         deleteSelectionButton = Button(this).apply {
             text = "Eliminar"; isAllCaps = false; visibility = View.GONE; setOnClickListener { confirmDeleteSelection() }
         }
-        header.actionContainer.addView(selectionButton)
-        header.actionContainer.addView(deleteSelectionButton)
-        return header.root
+        binding.screenHeader.actionContainer.addView(selectionButton)
+        binding.screenHeader.actionContainer.addView(deleteSelectionButton)
     }
 
     private fun render() {
