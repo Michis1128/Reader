@@ -7,7 +7,10 @@ import com.michis.reader.databinding.ItemDictionaryCategoryBinding
 import com.michis.reader.databinding.ItemDictionaryEntryBinding
 import com.michis.reader.databinding.ItemDictionarySelectionBinding
 import com.michis.reader.databinding.ViewDictionaryCategoryCreatorBinding
+import com.michis.reader.databinding.ViewDictionaryActionButtonBinding
 import com.michis.reader.databinding.ViewDictionaryEntryEditorBinding
+import com.michis.reader.databinding.ViewDictionaryMessageBinding
+import com.michis.reader.databinding.ViewDictionarySectionTitleBinding
 import com.michis.reader.databinding.ViewDictionarySelectionActionsBinding
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
@@ -16,7 +19,6 @@ import com.michis.reader.ui.ScreenHeader
 import android.graphics.Color
 import android.app.AlertDialog
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.*
@@ -61,20 +63,17 @@ class DictionaryActivity : ComponentActivity() {
         content.addView(message(
             "Organiza palabras, personajes o conceptos en subcategorías. Primero crea una subcategoría y después agrega dentro las palabras o frases."
         ).apply { setBackgroundResource(R.drawable.rounded_panel) })
-        if (pendingTerm.isNotBlank()) content.addView(TextView(this).apply {
-            text = "Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer; después podrás escribir su descripción ahora o dejarla pendiente."
-            textSize = 16f; setPadding(dp(12), dp(14), dp(12), dp(18)); setBackgroundResource(R.drawable.rounded_panel)
-        })
+        if (pendingTerm.isNotBlank()) content.addView(message(
+            "Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer; después podrás escribir su descripción ahora o dejarla pendiente."
+        ).apply { setBackgroundResource(R.drawable.rounded_panel) })
         content.addView(sectionTitle("Subcategorías"))
-        content.addView(Button(this).apply {
-            text = "Compartir este diccionario con otros libros"; isAllCaps = false
-            setOnClickListener { showSharingOptions() }
-        })
+        content.addView(actionButton("Compartir este diccionario con otros libros") { showSharingOptions() })
         val categories = database.dictionaryCategories(document.identifier)
-        if (categories.isNotEmpty() && pendingTerm.isBlank()) content.addView(Button(this).apply {
-            text = "Seleccionar subcategorías para eliminar"; isAllCaps = false
-            setOnClickListener { showCategorySelection(categories) }
-        })
+        if (categories.isNotEmpty() && pendingTerm.isBlank()) {
+            content.addView(actionButton("Seleccionar subcategorías para eliminar") {
+                showCategorySelection(categories)
+            })
+        }
         categories.forEach { category ->
             content.addView(categoryRow(category) {
                 if (pendingTerm.isBlank()) showEntries(category) else showEntryEditor(category, null)
@@ -101,13 +100,12 @@ class DictionaryActivity : ComponentActivity() {
     private fun showEntries(category: DictionaryCategory) {
         selectedCategory = category; content.removeAllViews(); titleView.text = category.name
         val entries = database.dictionaryEntries(category.identifier)
-        content.addView(Button(this).apply {
-            text = "Agregar palabra o frase"; isAllCaps = false; setOnClickListener { showEntryEditor(category, null) }
-        })
-        if (entries.isNotEmpty()) content.addView(Button(this).apply {
-            text = "Seleccionar elementos para eliminar"; isAllCaps = false
-            setOnClickListener { showEntrySelection(category, entries) }
-        })
+        content.addView(actionButton("Agregar palabra o frase") { showEntryEditor(category, null) })
+        if (entries.isNotEmpty()) {
+            content.addView(actionButton("Seleccionar elementos para eliminar") {
+                showEntrySelection(category, entries)
+            })
+        }
         entries.forEach { entry ->
             content.addView(entryRow(entry) { showEntryEditor(category, entry) })
         }
@@ -180,12 +178,15 @@ class DictionaryActivity : ComponentActivity() {
         content.addView(message("Selecciona los libros que también podrán usar las categorías y entradas de ${document.title}."))
         val linked = database.linkedDocuments(document.identifier)
         database.findDocuments().filter { it.identifier != document.identifier }.forEach { target ->
-            content.addView(CheckBox(this).apply {
-                text = target.title; isChecked = target.identifier in linked
+            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
+            itemBinding.selectionCheckbox.apply {
+                text = target.title
+                isChecked = target.identifier in linked
                 setOnCheckedChangeListener { _, checked -> database.setDictionaryLinked(document.identifier, target.identifier, checked) }
-            })
+            }
+            content.addView(itemBinding.root)
         }
-        content.addView(Button(this).apply { text = "Listo"; isAllCaps = false; setOnClickListener { showCategories() } })
+        content.addView(actionButton("Listo") { showCategories() })
     }
 
     private fun showEntryEditor(category: DictionaryCategory, existing: DictionaryEntry?) {
@@ -269,8 +270,18 @@ class DictionaryActivity : ComponentActivity() {
         title.setTextColor(palette.primaryText)
         subtitle.setTextColor(palette.secondaryText)
     }
-    private fun sectionTitle(value: String) = TextView(this).apply { text = value; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(0, dp(18), 0, dp(10)) }
-    private fun message(value: String) = TextView(this).apply { text = value; textSize = 16f; gravity = Gravity.CENTER; setPadding(dp(20), dp(34), dp(20), dp(34)) }
+    private fun actionButton(value: String, action: () -> Unit): View {
+        val binding = ViewDictionaryActionButtonBinding.inflate(layoutInflater, content, false)
+        binding.actionButton.text = value
+        binding.actionButton.setOnClickListener { action() }
+        return binding.root
+    }
+
+    private fun sectionTitle(value: String) =
+        ViewDictionarySectionTitleBinding.inflate(layoutInflater, content, false).root.apply { text = value }
+
+    private fun message(value: String) =
+        ViewDictionaryMessageBinding.inflate(layoutInflater, content, false).root.apply { text = value }
     private fun applyInsets(view: View) {
         val originalLeft = view.paddingLeft; val originalTop = view.paddingTop
         val originalRight = view.paddingRight; val originalBottom = view.paddingBottom
@@ -279,8 +290,6 @@ class DictionaryActivity : ComponentActivity() {
             target.setPadding(originalLeft + it.left, originalTop + it.top, originalRight + it.right, originalBottom + it.bottom)
         }; insets
     } }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-
     companion object {
         const val EXTRA_DOCUMENT_IDENTIFIER = "document_identifier"
         const val EXTRA_SELECTED_TEXT = "selected_text"
