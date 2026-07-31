@@ -7,6 +7,7 @@ import com.michis.reader.databinding.ItemLibraryCoverSmallBinding
 import com.michis.reader.databinding.ItemLibraryDocumentCompactBinding
 import com.michis.reader.databinding.ItemLibraryDocumentDetailedBinding
 import com.michis.reader.databinding.ItemLibraryFolderBinding
+import com.michis.reader.databinding.ViewLibraryGridRowBinding
 import com.michis.reader.reader.EpubPageEstimator
 import com.michis.reader.theme.AppThemePalette
 
@@ -16,7 +17,6 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.DragEvent
-import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -52,9 +52,8 @@ internal class LibraryViewRenderer(
         val cellWidth = (activity.resources.displayMetrics.widthPixels - dp(40)) / columns
         val cardHeight = (cellWidth * 1.48f).toInt()
         entries.chunked(columns).forEach { rowItems ->
-            documentList.addView(horizontalLayout {
-                clipChildren = false
-                clipToPadding = false
+            val rowBinding = ViewLibraryGridRowBinding.inflate(activity.layoutInflater, documentList, false)
+            documentList.addView(rowBinding.root.apply {
                 rowItems.forEach { entry ->
                     val card = when (entry) {
                         GridEntry.Parent -> parentGridCard()
@@ -207,7 +206,6 @@ internal class LibraryViewRenderer(
         }
     }
 
-    private fun horizontalLayout(block: LinearLayout.() -> Unit) = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; block() }
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 
     private data class GridCardViews(

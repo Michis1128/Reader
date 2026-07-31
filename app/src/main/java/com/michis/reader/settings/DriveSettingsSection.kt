@@ -3,7 +3,7 @@ package com.michis.reader.settings
 import com.michis.reader.databinding.ViewAutomaticSyncControlsBinding
 import com.michis.reader.databinding.ViewDriveSettingsPanelBinding
 import com.michis.reader.databinding.ViewGoogleAccountHeaderBinding
-import com.michis.reader.databinding.ViewSettingsActionBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.sync.*
 import com.michis.reader.sync.drive.*
@@ -373,7 +373,7 @@ class DriveSettingsSection(
     }
 
     private fun actionButton(value: String, configure: Button.() -> Unit): View {
-        val binding = ViewSettingsActionBinding.inflate(activity.layoutInflater)
+        val binding = ViewActionButtonBinding.inflate(activity.layoutInflater)
         binding.actionButton.text = value
         binding.actionButton.configure()
         return binding.root

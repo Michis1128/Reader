@@ -3,10 +3,10 @@ package com.michis.reader.reader
 import com.michis.reader.databinding.ItemEpubContentsGroupBinding
 import com.michis.reader.databinding.ItemEpubContentsLinkBinding
 import com.michis.reader.databinding.PanelEpubContentsBinding
+import com.michis.reader.databinding.ViewEpubContentsMessageBinding
 
 import android.view.View
 import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import org.readium.r2.shared.publication.Link
 
@@ -84,9 +84,8 @@ class EpubContentsPanel(
         }
     }
 
-    private fun message(textValue: String) = TextView(activity).apply {
-        text = textValue; setPadding(dp(12), dp(30), dp(12), dp(12))
-    }
+    private fun message(textValue: String) =
+        ViewEpubContentsMessageBinding.inflate(activity.layoutInflater).root.apply { text = textValue }
 
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 

@@ -7,7 +7,7 @@ import com.michis.reader.databinding.ItemDictionaryCategoryBinding
 import com.michis.reader.databinding.ItemDictionaryEntryBinding
 import com.michis.reader.databinding.ItemDictionarySelectionBinding
 import com.michis.reader.databinding.ViewDictionaryCategoryCreatorBinding
-import com.michis.reader.databinding.ViewDictionaryActionButtonBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewDictionaryEntryEditorBinding
 import com.michis.reader.databinding.ViewDictionaryMessageBinding
 import com.michis.reader.databinding.ViewDictionarySectionTitleBinding
@@ -271,7 +271,7 @@ class DictionaryActivity : ComponentActivity() {
         subtitle.setTextColor(palette.secondaryText)
     }
     private fun actionButton(value: String, action: () -> Unit): View {
-        val binding = ViewDictionaryActionButtonBinding.inflate(layoutInflater, content, false)
+        val binding = ViewActionButtonBinding.inflate(layoutInflater, content, false)
         binding.actionButton.text = value
         binding.actionButton.setOnClickListener { action() }
         return binding.root

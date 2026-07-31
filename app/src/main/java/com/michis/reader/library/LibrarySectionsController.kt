@@ -5,7 +5,7 @@ import com.michis.reader.data.*
 import com.michis.reader.databinding.ItemLibrarySectionCardBinding
 import com.michis.reader.databinding.ItemLibrarySectionSelectionBinding
 import com.michis.reader.databinding.ViewEmptyStateBinding
-import com.michis.reader.databinding.ViewLibrarySectionActionBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewLibrarySectionSelectionActionsBinding
 import com.michis.reader.databinding.ViewLibrarySectionSelectionInstructionBinding
 import com.michis.reader.dictionary.DictionaryActivity
@@ -31,7 +31,7 @@ internal class LibrarySectionsController(
         val annotations = database.annotations().filter { it.kind == kind }
         if (annotations.isEmpty()) addEmpty("Las citas, notas y marcadores de todos tus libros aparecerán aquí.")
         if (annotations.isNotEmpty()) {
-            val actionBinding = ViewLibrarySectionActionBinding.inflate(activity.layoutInflater, container, false)
+            val actionBinding = ViewActionButtonBinding.inflate(activity.layoutInflater, container, false)
             actionBinding.actionButton.apply {
                 text = "Seleccionar ${if (kind == "cita") "citas" else "marcadores"} para eliminar"
                 setOnClickListener { showAnnotationSelection(kind, annotations) }

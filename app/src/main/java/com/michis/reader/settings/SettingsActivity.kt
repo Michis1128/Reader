@@ -5,9 +5,10 @@ import com.michis.reader.databinding.ViewSettingsSectionBinding
 import com.michis.reader.databinding.ViewSettingsFieldBinding
 import com.michis.reader.databinding.ActivitySettingsBinding
 import com.michis.reader.databinding.ViewHexColorEditorBinding
-import com.michis.reader.databinding.ViewSettingsActionBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.databinding.ViewSettingsToggleBinding
+import com.michis.reader.databinding.ViewVerticalContainerBinding
 import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
@@ -54,13 +55,13 @@ class SettingsActivity : ComponentActivity() {
         AppThemePalette.apply(this)
     }
 
-    private fun buildAdvancedSyncScreen() = LinearLayout(this).apply {
+    private fun buildAdvancedSyncScreen() = verticalContainer().apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
         addView(description("Estas opciones cambian la vinculación técnica de Drive. La sincronización cotidiana puede hacerse desde la biblioteca."))
         addView(settingsSection(null) { addView(googleAccountPanel()) })
     }
 
-    private fun buildSettingsScreen() = LinearLayout(this).apply {
+    private fun buildSettingsScreen() = verticalContainer().apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
         addView(settingsSection("Cuenta y sincronización") {
             addView(googleAccountPanel())
@@ -73,8 +74,7 @@ class SettingsActivity : ComponentActivity() {
             addView(settingsField("Tiempo de pantalla activa", screenTimeoutSpinner()))
         })
         addView(settingsSection("Apariencia de menús") {
-            val customColorControls = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
+            val customColorControls = verticalContainer().apply {
                 addView(settingsField("Color personalizado", hexColorEditor("menu_custom_color", "#FFF4E0")))
                 visibility = if (normalizedMenuColorMode() == "custom") View.VISIBLE else View.GONE
             }
@@ -122,6 +122,8 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun googleAccountPanel(): View = driveSettingsSection.createPanel()
+
+    private fun verticalContainer() = ViewVerticalContainerBinding.inflate(layoutInflater).root
 
 
 
@@ -309,7 +311,7 @@ class SettingsActivity : ComponentActivity() {
         return binding.root
     }
     private fun settingsAction(value: String, configure: Button.() -> Unit): View {
-        val binding = ViewSettingsActionBinding.inflate(layoutInflater)
+        val binding = ViewActionButtonBinding.inflate(layoutInflater)
         binding.actionButton.text = value
         binding.actionButton.configure()
         return binding.root

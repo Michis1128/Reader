@@ -2,6 +2,8 @@ package com.michis.reader.sync.drive
 
 import com.michis.reader.databinding.ActivityDriveLibraryPickerBinding
 import com.michis.reader.databinding.ItemDriveLibrarySourceBinding
+import com.michis.reader.databinding.ViewEmptyStateBinding
+import com.michis.reader.databinding.ViewLoadingIndicatorBinding
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.theme.AppThemePalette
 import com.michis.reader.ui.ScreenHeader
@@ -9,10 +11,8 @@ import com.michis.reader.ui.ScreenHeader
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -92,7 +92,8 @@ class DriveLibraryPickerActivity : ComponentActivity() {
     }
 
     private fun loadSources() {
-        listContainer.addView(ProgressBar(this).apply { isIndeterminate = true })
+        listContainer.removeAllViews()
+        listContainer.addView(ViewLoadingIndicatorBinding.inflate(layoutInflater, listContainer, false).root)
         lifecycleScope.launch {
             val parentIdentifier = navigationStack.last().identifier
             val result = runCatching { withContext(Dispatchers.IO) { repository.listChildren(accessToken, parentIdentifier) } }
@@ -152,7 +153,8 @@ class DriveLibraryPickerActivity : ComponentActivity() {
         loadSources()
     }
 
-    private fun message(value: String) = TextView(this).apply { text = value; gravity = Gravity.CENTER; setPadding(dp(16), dp(30), dp(16), dp(30)) }
+    private fun message(value: String) =
+        ViewEmptyStateBinding.inflate(layoutInflater, listContainer, false).root.apply { text = value }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object {
