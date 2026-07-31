@@ -2,24 +2,21 @@
 
 package com.michis.reader.reader
 
-import com.michis.reader.R
+import com.michis.reader.databinding.ItemEpubSettingsFamilyBinding
+import com.michis.reader.databinding.PanelEpubSettingsBinding
+import com.michis.reader.databinding.ViewNumberStepperBinding
 import com.michis.reader.settings.*
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.text.InputType
-import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
@@ -37,13 +34,15 @@ class EpubReadingSettingsPanel(
     private val selectFont: () -> Unit,
     private val closePanel: () -> Unit
 ) {
+    private lateinit var familyContainer: LinearLayout
+
     fun create(): View {
         val preferences = settings.preferences
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(18))
-            tag = ReaderMenuTags.SURFACE
-            addView(header("Lectura", "Cerrar", closePanel))
+        val panelBinding = PanelEpubSettingsBinding.inflate(activity.layoutInflater)
+        panelBinding.panelContainer.tag = ReaderMenuTags.SURFACE
+        panelBinding.closeButton.setOnClickListener { closePanel() }
+        familyContainer = panelBinding.familyContainer
+        familyContainer.apply {
             addView(family("Texto y tipografía") {
                 addView(label("Tamaño de letra (dp)"))
                 addView(numberStepper(settings.fontSizeDp.toDouble(), 8.0, 72.0, 1.0) { value ->
@@ -126,25 +125,20 @@ class EpubReadingSettingsPanel(
                 })
             })
         }
-        return ScrollView(activity).apply { isFillViewport = true; addView(content) }
+        return panelBinding.root
     }
 
     private fun numberStepper(initial: Double, minimum: Double, maximum: Double, step: Double, changed: (Double) -> Unit): View {
         var value = initial.coerceIn(minimum, maximum)
-        val input = EditText(activity).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(format(value)); gravity = Gravity.CENTER; setSingleLine()
-        }
+        val binding = ViewNumberStepperBinding.inflate(activity.layoutInflater)
+        val input = binding.valueInput.apply { setText(format(value)) }
         fun update(next: Double) {
             value = next.coerceIn(minimum, maximum); input.setText(format(value)); changed(value)
         }
         input.setOnFocusChangeListener { _, focused -> if (!focused) update(input.text.toString().toDoubleOrNull() ?: value) }
-        return LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Button(activity).apply { text = "−"; setOnClickListener { update(value - step) } }, LinearLayout.LayoutParams(dp(54), dp(50)))
-            addView(input, LinearLayout.LayoutParams(0, dp(50), 1f))
-            addView(Button(activity).apply { text = "+"; setOnClickListener { update(value + step) } }, LinearLayout.LayoutParams(dp(54), dp(50)))
-        }
+        binding.decreaseButton.setOnClickListener { update(value - step) }
+        binding.increaseButton.setOnClickListener { update(value + step) }
+        return binding.root
     }
 
     private fun slider(maximum: Int, initial: Int, changed: (Int) -> Unit) = SeekBar(activity).apply {
@@ -165,22 +159,18 @@ class EpubReadingSettingsPanel(
         }
     }
 
-    private fun header(title: String, actionText: String, action: () -> Unit) = LinearLayout(activity).apply {
-        gravity = Gravity.CENTER_VERTICAL
-        addView(TextView(activity).apply { text = title; textSize = 24f; typeface = android.graphics.Typeface.DEFAULT_BOLD }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        addView(Button(activity).apply { text = actionText; isAllCaps = false; setOnClickListener { action() } })
-    }
-
     private fun label(value: String) = TextView(activity).apply {
         text = value; textSize = 16f; setPadding(dp(2), dp(12), dp(2), dp(6))
     }
 
-    private fun family(title: String, build: LinearLayout.() -> Unit) = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL; tag = ReaderMenuTags.CARD
-        setPadding(dp(14), dp(10), dp(14), dp(14)); setBackgroundResource(R.drawable.rounded_panel); elevation = dp(2).toFloat()
-        addView(TextView(activity).apply { text = title; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(4)) })
-        build()
-    }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) } }
+    private fun family(title: String, build: LinearLayout.() -> Unit): View {
+        val binding = ItemEpubSettingsFamilyBinding.inflate(activity.layoutInflater, familyContainer, false)
+        binding.root.tag = ReaderMenuTags.CARD
+        binding.root.elevation = dp(2).toFloat()
+        binding.familyTitle.text = title
+        binding.familyContent.apply(build)
+        return binding.root
+    }
 
     private fun format(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
