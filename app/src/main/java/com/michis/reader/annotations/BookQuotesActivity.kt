@@ -3,6 +3,8 @@ package com.michis.reader.annotations
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityBookQuotesBinding
 import com.michis.reader.databinding.ItemQuoteBinding
+import com.michis.reader.databinding.ViewEmptyStateBinding
+import com.michis.reader.databinding.ViewQuoteSelectionActionsBinding
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
@@ -10,12 +12,10 @@ import com.michis.reader.ui.ScreenHeader
 import android.content.Intent
 import android.app.AlertDialog
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.activity.ComponentActivity
 
 class BookQuotesActivity : ComponentActivity() {
@@ -47,24 +47,32 @@ class BookQuotesActivity : ComponentActivity() {
             binding.screenHeader,
             "Citas · ${database.findDocument(documentIdentifier)?.title.orEmpty()}"
         ) { finish() }
-        selectionButton = Button(this).apply {
-            text = "Seleccionar"; isAllCaps = false; setOnClickListener {
+        val actionsBinding = ViewQuoteSelectionActionsBinding.inflate(
+            layoutInflater,
+            binding.screenHeader.actionContainer,
+            false
+        )
+        selectionButton = actionsBinding.selectionButton.apply {
+            setOnClickListener {
                 selectionMode = !selectionMode
                 if (!selectionMode) selectedQuoteIdentifiers.clear()
                 updateSelectionControls(); render()
             }
         }
-        deleteSelectionButton = Button(this).apply {
-            text = "Eliminar"; isAllCaps = false; visibility = View.GONE; setOnClickListener { confirmDeleteSelection() }
+        deleteSelectionButton = actionsBinding.deleteSelectionButton.apply {
+            setOnClickListener { confirmDeleteSelection() }
         }
-        binding.screenHeader.actionContainer.addView(selectionButton)
-        binding.screenHeader.actionContainer.addView(deleteSelectionButton)
+        binding.screenHeader.actionContainer.addView(actionsBinding.root)
     }
 
     private fun render() {
         content.removeAllViews()
         val quotes = database.annotations(documentIdentifier).filter { it.kind == "cita" }
-        if (quotes.isEmpty()) content.addView(TextView(this).apply { text = "Este libro todavía no tiene citas."; gravity = Gravity.CENTER; setPadding(0, dp(60), 0, 0) })
+        if (quotes.isEmpty()) {
+            val emptyBinding = ViewEmptyStateBinding.inflate(layoutInflater, content, false)
+            emptyBinding.root.text = "Este libro todavía no tiene citas."
+            content.addView(emptyBinding.root)
+        }
         quotes.forEach { quote ->
             val binding = ItemQuoteBinding.inflate(layoutInflater, content, false)
             binding.selectionCheckbox.apply {
@@ -127,7 +135,6 @@ class BookQuotesActivity : ComponentActivity() {
             .putExtra(EXTRA_QUOTE_LOCATION, quote.location).putExtra(EXTRA_QUOTE_PAGE, quote.pageNumber))
     }
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun applyInsets(view: View) {
         val left = view.paddingLeft; val top = view.paddingTop; val right = view.paddingRight; val bottom = view.paddingBottom
         view.setOnApplyWindowInsetsListener { target, insets ->

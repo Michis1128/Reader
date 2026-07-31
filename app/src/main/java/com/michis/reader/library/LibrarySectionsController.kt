@@ -4,6 +4,10 @@ import com.michis.reader.annotations.BookQuotesActivity
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ItemLibrarySectionCardBinding
 import com.michis.reader.databinding.ItemLibrarySectionSelectionBinding
+import com.michis.reader.databinding.ViewEmptyStateBinding
+import com.michis.reader.databinding.ViewLibrarySectionActionBinding
+import com.michis.reader.databinding.ViewLibrarySectionSelectionActionsBinding
+import com.michis.reader.databinding.ViewLibrarySectionSelectionInstructionBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.theme.AppThemePalette
 
@@ -11,11 +15,9 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
-import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Button
 
 /** Presenta las secciones de citas, marcadores y diccionarios de la biblioteca. */
 internal class LibrarySectionsController(
@@ -28,10 +30,14 @@ internal class LibrarySectionsController(
         prepareSection()
         val annotations = database.annotations().filter { it.kind == kind }
         if (annotations.isEmpty()) addEmpty("Las citas, notas y marcadores de todos tus libros aparecerán aquí.")
-        if (annotations.isNotEmpty()) container.addView(Button(activity).apply {
-            text = "Seleccionar ${if (kind == "cita") "citas" else "marcadores"} para eliminar"
-            isAllCaps = false; setOnClickListener { showAnnotationSelection(kind, annotations) }
-        })
+        if (annotations.isNotEmpty()) {
+            val actionBinding = ViewLibrarySectionActionBinding.inflate(activity.layoutInflater, container, false)
+            actionBinding.actionButton.apply {
+                text = "Seleccionar ${if (kind == "cita") "citas" else "marcadores"} para eliminar"
+                setOnClickListener { showAnnotationSelection(kind, annotations) }
+            }
+            container.addView(actionBinding.root)
+        }
         if (kind == "cita") {
             annotations.groupBy { it.documentIdentifier }.forEach { (documentIdentifier, quotes) ->
                 val document = database.findDocument(documentIdentifier) ?: return@forEach
@@ -76,10 +82,15 @@ internal class LibrarySectionsController(
     private fun showAnnotationSelection(kind: String, annotations: List<SavedAnnotation>) {
         prepareSection()
         val selected = linkedSetOf<Long>()
-        container.addView(TextView(activity).apply {
-            text = "Selecciona uno o varios ${if (kind == "cita") "fragmentos" else "marcadores"}."
-            textSize = 17f; setPadding(dp(12), dp(12), dp(12), dp(16))
-        })
+        val instructionBinding = ViewLibrarySectionSelectionInstructionBinding.inflate(
+            activity.layoutInflater,
+            container,
+            false
+        )
+        instructionBinding.root.text =
+            "Selecciona uno o varios ${if (kind == "cita") "fragmentos" else "marcadores"}."
+        container.addView(instructionBinding.root)
+        val actionsBinding = ViewLibrarySectionSelectionActionsBinding.inflate(activity.layoutInflater, container, false)
         annotations.forEach { annotation ->
             val binding = ItemLibrarySectionSelectionBinding.inflate(activity.layoutInflater, container, false)
             binding.selectionCheckbox.apply {
@@ -92,20 +103,17 @@ internal class LibrarySectionsController(
             AppThemePalette.markCard(binding.selectionCheckbox)
             container.addView(binding.root)
         }
-        container.addView(Button(activity).apply {
-            text = "Eliminar seleccionados"; isAllCaps = false; setOnClickListener {
-                if (selected.isEmpty()) return@setOnClickListener
-                AlertDialog.Builder(activity).setTitle("Eliminar selección")
-                    .setMessage("Se eliminarán ${selected.size} elementos y el cambio se sincronizará con Drive.")
-                    .setNegativeButton("Cancelar", null)
-                    .setPositiveButton("Eliminar") { _, _ ->
-                        selected.forEach(database::deleteAnnotation); showAnnotations(kind)
-                    }.show()
-            }
-        })
-        container.addView(Button(activity).apply {
-            text = "Cancelar"; isAllCaps = false; setOnClickListener { showAnnotations(kind) }
-        })
+        actionsBinding.deleteButton.setOnClickListener {
+            if (selected.isEmpty()) return@setOnClickListener
+            AlertDialog.Builder(activity).setTitle("Eliminar selección")
+                .setMessage("Se eliminarán ${selected.size} elementos y el cambio se sincronizará con Drive.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Eliminar") { _, _ ->
+                    selected.forEach(database::deleteAnnotation); showAnnotations(kind)
+                }.show()
+        }
+        actionsBinding.cancelButton.setOnClickListener { showAnnotations(kind) }
+        container.addView(actionsBinding.root)
         applyCurrentTheme()
     }
 
@@ -151,9 +159,11 @@ internal class LibrarySectionsController(
         container.post { AppThemePalette.apply(activity) }
     }
 
-    private fun addEmpty(message: String) = container.addView(TextView(activity).apply {
-        text = message; gravity = Gravity.CENTER; textSize = 17f; setPadding(dp(20), dp(70), dp(20), 0)
-    })
+    private fun addEmpty(message: String) {
+        val binding = ViewEmptyStateBinding.inflate(activity.layoutInflater, container, false)
+        binding.root.text = message
+        container.addView(binding.root)
+    }
 
     private fun sectionCard(): ItemLibrarySectionCardBinding {
         val binding = ItemLibrarySectionCardBinding.inflate(activity.layoutInflater, container, false)
@@ -161,5 +171,4 @@ internal class LibrarySectionsController(
         return binding
     }
 
-    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 }

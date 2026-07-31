@@ -4,19 +4,16 @@ import com.michis.reader.R
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityResetBooksBinding
 import com.michis.reader.databinding.ItemResetBookBinding
+import com.michis.reader.databinding.ViewEmptyStateBinding
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
-import com.michis.reader.ui.LimitedHeightSpinner
 import com.michis.reader.ui.ScreenHeader
 
 import android.app.AlertDialog
-import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -128,7 +125,11 @@ class ResetBooksActivity : ComponentActivity() {
             AppThemePalette.markCard(itemBinding.bookCheckbox)
             listContainer.addView(itemBinding.root)
         }
-        if (visibleDocuments.isEmpty()) listContainer.addView(TextView(this).apply { text = "No se encontraron libros"; gravity = Gravity.CENTER; setPadding(dp(12), dp(40), dp(12), dp(40)) })
+        if (visibleDocuments.isEmpty()) {
+            val emptyBinding = ViewEmptyStateBinding.inflate(layoutInflater, listContainer, false)
+            emptyBinding.root.text = "No se encontraron libros"
+            listContainer.addView(emptyBinding.root)
+        }
         AppThemePalette.apply(this)
     }
 
