@@ -4,6 +4,7 @@ import com.michis.reader.R
 import com.michis.reader.data.*
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
+import com.michis.reader.ui.ScreenHeader
 
 import android.graphics.Color
 import android.app.AlertDialog
@@ -43,12 +44,9 @@ class DictionaryActivity : ComponentActivity() {
 
     private fun buildScreen(): View = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(16)); AppThemePalette.markBackground(this)
-        addView(LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Button(context).apply { text = "‹"; setOnClickListener { navigateBack() } })
-            titleView = TextView(context).apply { textSize = 24f; typeface = android.graphics.Typeface.DEFAULT_BOLD; maxLines = 2 }
-            addView(titleView, LinearLayout.LayoutParams(0, dp(64), 1f))
-        })
+        val header = ScreenHeader.create(this@DictionaryActivity, "") { navigateBack() }
+        titleView = header.titleText
+        addView(header.root)
         val scroll = ScrollView(context)
         content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(content); addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))

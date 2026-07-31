@@ -4,6 +4,7 @@ import com.michis.reader.R
 import com.michis.reader.data.*
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
+import com.michis.reader.ui.ScreenHeader
 
 import android.graphics.Color
 import android.os.Bundle
@@ -68,12 +69,7 @@ class QuoteColorActivity : ComponentActivity() {
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; AppThemePalette.markBackground(this)
-            addView(LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(5), dp(18), dp(5)); elevation = dp(5).toFloat()
-                AppThemePalette.markSurface(this)
-                addView(Button(context).apply { text = "‹"; contentDescription = "Regresar"; setOnClickListener { finish() } })
-                addView(TextView(context).apply { text = "Nueva cita"; textSize = 27f }, LinearLayout.LayoutParams(0, dp(60), 1f))
-            })
+            addView(ScreenHeader.create(this@QuoteColorActivity, "Nueva cita") { finish() }.root)
             addView(ScrollView(context).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
             applyInsets(this)
         }

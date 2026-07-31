@@ -1,7 +1,9 @@
 package com.michis.reader.sync.drive
 
+import com.michis.reader.R
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.theme.AppThemePalette
+import com.michis.reader.ui.ScreenHeader
 
 import android.graphics.Color
 import android.graphics.Typeface
@@ -71,14 +73,7 @@ class DriveLibraryPickerActivity : ComponentActivity() {
             view.setPadding(dp(14), bars.top + dp(10), dp(14), bars.bottom + dp(10))
             insets
         }
-        addView(LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Button(context).apply { text = "‹"; contentDescription = "Volver"; setOnClickListener { finish() } })
-            addView(TextView(context).apply {
-                text = "Biblioteca de Google Drive"; textSize = 24f; typeface = Typeface.DEFAULT_BOLD
-                setPadding(dp(10), 0, 0, 0)
-            }, LinearLayout.LayoutParams(0, dp(58), 1f))
-        })
+        addView(ScreenHeader.create(this@DriveLibraryPickerActivity, "Biblioteca de Google Drive") { finish() }.root)
         addView(TextView(context).apply {
             text = "Selecciona carpetas completas, libros EPUB individuales o una combinación de ambos."
             textSize = 15f; setTextColor(Color.DKGRAY); setPadding(dp(4), 0, dp(4), dp(12))

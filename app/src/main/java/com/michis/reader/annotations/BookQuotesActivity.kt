@@ -4,6 +4,7 @@ import com.michis.reader.R
 import com.michis.reader.data.*
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.theme.*
+import com.michis.reader.ui.ScreenHeader
 
 import android.content.Intent
 import android.app.AlertDialog
@@ -41,25 +42,24 @@ class BookQuotesActivity : ComponentActivity() {
         setContentView(root); render(); AppThemePalette.apply(this)
     }
 
-    private fun fixedHeader() = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(5), dp(18), dp(5)); elevation = dp(5).toFloat()
-        AppThemePalette.markSurface(this)
-        addView(Button(context).apply { text = "‹"; contentDescription = "Regresar"; setOnClickListener { finish() } })
-        addView(TextView(context).apply {
-            text = "Citas · ${database.findDocument(documentIdentifier)?.title.orEmpty()}"; textSize = 23f; maxLines = 2
-        }, LinearLayout.LayoutParams(0, dp(62), 1f))
-        selectionButton = Button(context).apply {
+    private fun fixedHeader(): View {
+        val header = ScreenHeader.create(
+            this,
+            "Citas · ${database.findDocument(documentIdentifier)?.title.orEmpty()}"
+        ) { finish() }
+        selectionButton = Button(this).apply {
             text = "Seleccionar"; isAllCaps = false; setOnClickListener {
                 selectionMode = !selectionMode
                 if (!selectionMode) selectedQuoteIdentifiers.clear()
                 updateSelectionControls(); render()
             }
         }
-        addView(selectionButton)
-        deleteSelectionButton = Button(context).apply {
+        deleteSelectionButton = Button(this).apply {
             text = "Eliminar"; isAllCaps = false; visibility = View.GONE; setOnClickListener { confirmDeleteSelection() }
         }
-        addView(deleteSelectionButton)
+        header.actionContainer.addView(selectionButton)
+        header.actionContainer.addView(deleteSelectionButton)
+        return header.root
     }
 
     private fun render() {

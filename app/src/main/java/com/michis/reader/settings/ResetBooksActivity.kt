@@ -6,6 +6,7 @@ import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
 import com.michis.reader.ui.LimitedHeightSpinner
+import com.michis.reader.ui.ScreenHeader
 
 import android.app.AlertDialog
 import android.graphics.Color
@@ -46,11 +47,7 @@ class ResetBooksActivity : ComponentActivity() {
                 view.setPadding(dp(14) + bars.left, dp(10) + bars.top, dp(14) + bars.right, dp(12) + bars.bottom)
             }; insets
         }
-        addView(LinearLayout(context).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Button(context).apply { text = "‹"; contentDescription = "Volver"; setOnClickListener { finish() } })
-            addView(TextView(context).apply { text = "Reiniciar libros"; textSize = 26f; typeface = Typeface.DEFAULT_BOLD; setPadding(dp(10), 0, 0, 0) }, LinearLayout.LayoutParams(0, dp(58), 1f))
-        })
+        addView(ScreenHeader.create(this@ResetBooksActivity, getString(R.string.reset_books_title)) { finish() }.root)
         addView(TextView(context).apply {
             text = "El libro se conservará, pero se borrarán su progreso, citas, notas, marcadores y diccionario."
             setTextColor(Color.DKGRAY); setPadding(dp(3), 0, dp(3), dp(12))

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colores de respaldo previos a la aplicación de la paleta dinámica. -->
+    <color name="ui_background_fallback">#FFF7F7F9</color>
+    <color name="ui_surface_fallback">#FFFFFFFF</color>
+    <color name="ui_accent_fallback">#FF53699F</color>
+    <color name="ui_on_accent_fallback">#FFFFFFFF</color>
+    <color name="ui_text_fallback">#FF191B21</color>
+    <color name="ui_outline_fallback">#2A191B21</color>
+</resources>
