@@ -666,16 +666,31 @@ class ReadiumEpubActivity : FragmentActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        // onStop is also invoked when the user minimizes the app. Persisting and
+        // enqueueing here lets WorkManager finish the book-only synchronization
+        // even if Android subsequently destroys the reader process.
+        if (!isChangingConfigurations) persistProgressAndScheduleBookSync()
+        super.onStop()
+    }
+
     override fun finish() {
-        if (::navigator.isInitialized && ::document.isInitialized) {
-            val locator = navigator.currentLocator.value
-            locator.locations.totalProgression?.let { progression ->
-                database.updateProgress(document.identifier, locator.locations.position ?: 0, progression.toFloat())
-            }
-            AutomaticDriveSyncScheduler(this).enqueueBookSync(document.identifier)
-        }
+        persistProgressAndScheduleBookSync()
         ReaderResumeState.markReaderExited(this)
         super.finish()
+    }
+
+    private fun persistProgressAndScheduleBookSync() {
+        if (!::navigator.isInitialized || !::document.isInitialized || !::database.isInitialized) return
+        val locator = navigator.currentLocator.value
+        locator.locations.totalProgression?.let { progression ->
+            database.updateProgress(
+                document.identifier,
+                locator.locations.position ?: 0,
+                progression.toFloat()
+            )
+        }
+        AutomaticDriveSyncScheduler(this).enqueueBookSync(document.identifier)
     }
 
     private fun launchReaderMenu(intent: Intent) {
