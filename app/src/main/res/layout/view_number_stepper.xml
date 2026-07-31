@@ -17,6 +17,8 @@
         style="@style/Widget.MichisReader.Input"
         android:layout_width="0dp"
         android:layout_height="50dp"
+        android:layout_marginStart="@dimen/ui_content_spacing_small"
+        android:layout_marginEnd="@dimen/ui_content_spacing_small"
         android:layout_weight="1"
         android:gravity="center"
         android:inputType="numberDecimal"

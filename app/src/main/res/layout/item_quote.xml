@@ -52,6 +52,7 @@
             style="@style/Widget.MichisReader.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing_small"
             android:layout_weight="1"
             android:text="Color" />
 
@@ -60,6 +61,7 @@
             style="@style/Widget.MichisReader.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing_small"
             android:layout_weight="1"
             android:text="@string/action_delete" />
     </LinearLayout>

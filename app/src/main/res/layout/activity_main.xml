@@ -36,6 +36,7 @@
             style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing_small"
             android:contentDescription="@string/settings_title"
             android:text="⚙"
             android:textSize="20sp" />
@@ -109,6 +110,7 @@
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:text="@string/quotes_title"
                 android:textSize="12sp" />
 
@@ -117,6 +119,7 @@
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:text="@string/bookmarks_title"
                 android:textSize="12sp" />
 
@@ -125,6 +128,7 @@
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:text="@string/dictionaries_title"
                 android:textSize="12sp" />
 
@@ -133,6 +137,7 @@
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:textSize="12sp" />
 
             <Button
@@ -140,6 +145,7 @@
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:textSize="12sp" />
         </LinearLayout>
     </HorizontalScrollView>
