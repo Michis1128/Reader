@@ -2,6 +2,8 @@ package com.michis.reader.dictionary
 
 import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ItemDictionaryCategoryBinding
+import com.michis.reader.databinding.ItemDictionaryEntryBinding
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
@@ -72,7 +74,11 @@ class DictionaryActivity : ComponentActivity() {
             text = "Seleccionar subcategorías para eliminar"; isAllCaps = false
             setOnClickListener { showCategorySelection(categories) }
         })
-        categories.forEach { category -> content.addView(card(category.name) { if (pendingTerm.isBlank()) showEntries(category) else showEntryEditor(category, null) }) }
+        categories.forEach { category ->
+            content.addView(categoryRow(category) {
+                if (pendingTerm.isBlank()) showEntries(category) else showEntryEditor(category, null)
+            })
+        }
         if (categories.isEmpty()) content.addView(message("Este libro todavía no tiene subcategorías. Crea la primera, por ejemplo: Personajes, Palabras o Lugares."))
         val categoryName = EditText(this).apply { hint = "Nombre de la nueva subcategoría"; setSingleLine(); setBackgroundResource(R.drawable.rounded_panel) }
         content.addView(categoryName, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(16) })
@@ -99,7 +105,9 @@ class DictionaryActivity : ComponentActivity() {
             text = "Seleccionar elementos para eliminar"; isAllCaps = false
             setOnClickListener { showEntrySelection(category, entries) }
         })
-        entries.forEach { entry -> content.addView(card(entry.term, entry.description.ifBlank { "Sin descripción" }) { showEntryEditor(category, entry) }) }
+        entries.forEach { entry ->
+            content.addView(entryRow(entry) { showEntryEditor(category, entry) })
+        }
         if (entries.isEmpty()) content.addView(message("Esta subcategoría aún no tiene elementos."))
     }
 
@@ -204,12 +212,30 @@ class DictionaryActivity : ComponentActivity() {
         if (selectedCategory != null) showCategories() else finish()
     }
 
-    private fun card(title: String, subtitle: String = "Toca para abrir", action: () -> Unit) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(14), dp(16), dp(14)); setBackgroundResource(R.drawable.rounded_panel)
-        addView(TextView(context).apply { text = title; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD })
-        addView(TextView(context).apply { text = subtitle; setTextColor(Color.DKGRAY); setPadding(0, dp(4), 0, 0) })
-        setOnClickListener { action() }
-    }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) } }
+    private fun categoryRow(category: DictionaryCategory, action: () -> Unit): View {
+        val binding = ItemDictionaryCategoryBinding.inflate(layoutInflater, content, false)
+        binding.categoryName.text = category.name
+        binding.root.setOnClickListener { action() }
+        styleDictionaryCard(binding.root, binding.categoryName, binding.categoryHint)
+        return binding.root
+    }
+
+    private fun entryRow(entry: DictionaryEntry, action: () -> Unit): View {
+        val binding = ItemDictionaryEntryBinding.inflate(layoutInflater, content, false)
+        binding.entryTerm.text = entry.term
+        binding.entryDescription.text = entry.description.ifBlank { "Sin descripción" }
+        binding.root.setOnClickListener { action() }
+        styleDictionaryCard(binding.root, binding.entryTerm, binding.entryDescription)
+        return binding.root
+    }
+
+    private fun styleDictionaryCard(card: View, title: TextView, subtitle: TextView) {
+        val palette = AppThemePalette.current(this)
+        card.background = AppThemePalette.cardBackground(this)
+        AppThemePalette.markCard(card)
+        title.setTextColor(palette.primaryText)
+        subtitle.setTextColor(palette.secondaryText)
+    }
     private fun sectionTitle(value: String) = TextView(this).apply { text = value; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(0, dp(18), 0, dp(10)) }
     private fun message(value: String) = TextView(this).apply { text = value; textSize = 16f; gravity = Gravity.CENTER; setPadding(dp(20), dp(34), dp(20), dp(34)) }
     private fun applyInsets(view: View) {

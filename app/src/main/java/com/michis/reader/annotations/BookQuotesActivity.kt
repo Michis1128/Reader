@@ -2,6 +2,7 @@ package com.michis.reader.annotations
 
 import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ItemQuoteBinding
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
@@ -66,30 +67,33 @@ class BookQuotesActivity : ComponentActivity() {
         content.removeAllViews()
         val quotes = database.annotations(documentIdentifier).filter { it.kind == "cita" }
         if (quotes.isEmpty()) content.addView(TextView(this).apply { text = "Este libro todavía no tiene citas."; gravity = Gravity.CENTER; setPadding(0, dp(60), 0, 0) })
-        quotes.forEach { quote -> content.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(15), dp(14), dp(15), dp(12)); setBackgroundResource(R.drawable.rounded_panel)
-            if (selectionMode) addView(CheckBox(context).apply {
-                text = "Seleccionar cita"; isChecked = quote.identifier in selectedQuoteIdentifiers
+        quotes.forEach { quote ->
+            val binding = ItemQuoteBinding.inflate(layoutInflater, content, false)
+            binding.selectionCheckbox.apply {
+                visibility = if (selectionMode) View.VISIBLE else View.GONE
+                isChecked = quote.identifier in selectedQuoteIdentifiers
                 setOnCheckedChangeListener { _, checked ->
                     if (checked) selectedQuoteIdentifiers += quote.identifier else selectedQuoteIdentifiers -= quote.identifier
                     updateSelectionControls()
                 }
-            })
-            addView(TextView(context).apply { text = quote.selectedText; textSize = 17f; setBackgroundColor(quote.color) })
-            addView(TextView(context).apply { text = "Página ${quote.pageNumber.coerceAtLeast(1)}"; setTextColor(Color.DKGRAY) })
-            if (!selectionMode) addView(LinearLayout(context).apply {
-                addView(Button(context).apply { text = "Abrir"; isAllCaps = false; setOnClickListener { openQuote(quote) } })
-                addView(Button(context).apply { text = "Color"; isAllCaps = false; setOnClickListener { editColor(quote) } })
-                addView(Button(context).apply { text = "Eliminar"; isAllCaps = false; setOnClickListener { database.deleteAnnotation(quote.identifier); render() } })
-            })
-            setOnClickListener {
+            }
+            binding.quoteText.apply { text = quote.selectedText; setBackgroundColor(quote.color) }
+            binding.pageText.text = "Página ${quote.pageNumber.coerceAtLeast(1)}"
+            binding.actionContainer.visibility = if (selectionMode) View.GONE else View.VISIBLE
+            binding.openButton.setOnClickListener { openQuote(quote) }
+            binding.colorButton.setOnClickListener { editColor(quote) }
+            binding.deleteButton.setOnClickListener { database.deleteAnnotation(quote.identifier); render() }
+            binding.root.setOnClickListener {
                 if (selectionMode) {
                     if (!selectedQuoteIdentifiers.add(quote.identifier)) selectedQuoteIdentifiers.remove(quote.identifier)
                     updateSelectionControls(); render()
                 } else openQuote(quote)
             }
-        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }) }
+            AppThemePalette.markCard(binding.root)
+            content.addView(binding.root)
+        }
         updateSelectionControls()
+        content.post { AppThemePalette.apply(this) }
     }
 
     private fun updateSelectionControls() {
