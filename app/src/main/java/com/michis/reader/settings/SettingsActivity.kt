@@ -4,6 +4,7 @@ import com.michis.reader.R
 import com.michis.reader.databinding.ViewSettingsSectionBinding
 import com.michis.reader.databinding.ViewSettingsFieldBinding
 import com.michis.reader.databinding.ActivitySettingsBinding
+import com.michis.reader.databinding.ViewHexColorEditorBinding
 import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
@@ -17,7 +18,6 @@ import android.os.Bundle
 import android.os.Build
 import android.text.InputFilter
 import android.text.InputType
-import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.*
@@ -230,22 +230,18 @@ class SettingsActivity : ComponentActivity() {
 
     private fun hexColorEditor(preferenceKey: String, defaultColor: String): View {
         val preferences = readerSettings.preferences
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val binding = ViewHexColorEditorBinding.inflate(layoutInflater)
         val initialColor = parseColor(preferences.getString(preferenceKey, defaultColor))
-        val preview = View(this).apply {
+        val preview = binding.colorPreview.apply {
             if (preferenceKey == "menu_custom_color") setCustomMenuColorPreview(this, initialColor)
             else setBackgroundColor(initialColor)
         }
-        val input = EditText(this).apply {
-            hint = defaultColor.removePrefix("#"); setText(preferences.getString(preferenceKey, defaultColor)?.removePrefix("#"))
+        val input = binding.hexInput.apply {
+            hint = defaultColor.removePrefix("#")
+            setText(preferences.getString(preferenceKey, defaultColor)?.removePrefix("#"))
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setSingleLine()
             filters = arrayOf(InputFilter.LengthFilter(8), InputFilter { source, _, _, _, _, _ -> source.filter { it in "0123456789abcdefABCDEF" } })
         }
-        row.addView(TextView(this).apply { text = "#"; textSize = 20f })
-        row.addView(input, LinearLayout.LayoutParams(0, dp(50), 1f))
-        row.addView(preview, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginStart = dp(8) })
-        container.addView(row)
         var pendingColor = parseColor(preferences.getString(preferenceKey, defaultColor))
         var updating = false
         input.addTextChangedListener(object : android.text.TextWatcher {
@@ -274,7 +270,7 @@ class SettingsActivity : ComponentActivity() {
                 Toast.makeText(this, "Color aplicado", Toast.LENGTH_SHORT).show()
             }
         }
-        return container
+        return binding.root
     }
 
     private fun parseColor(value: String?) = runCatching { Color.parseColor(value) }.getOrDefault(0x665A7D9A)
