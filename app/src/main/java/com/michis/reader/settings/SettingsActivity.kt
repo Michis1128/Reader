@@ -3,6 +3,7 @@ package com.michis.reader.settings
 import com.michis.reader.R
 import com.michis.reader.databinding.ViewSettingsSectionBinding
 import com.michis.reader.databinding.ViewSettingsFieldBinding
+import com.michis.reader.databinding.ActivitySettingsBinding
 import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
@@ -37,18 +38,16 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val screen = if (advancedSyncMode) buildAdvancedSyncScreen() else buildSettingsScreen()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; AppThemePalette.markBackground(this)
-            addView(ScreenHeader.create(
-                this@SettingsActivity,
-                if (advancedSyncMode) "Drive avanzado" else getString(R.string.settings_title)
-            ) { finish() }.root)
-            addView(ScrollView(context).apply {
-                isFillViewport = true; clipToPadding = true; addView(screen)
-            }, LinearLayout.LayoutParams(-1, 0, 1f))
-        }
-        applyInsets(root)
-        setContentView(root)
+        val binding = ActivitySettingsBinding.inflate(layoutInflater)
+        AppThemePalette.markBackground(binding.rootContainer)
+        ScreenHeader.configure(
+            this,
+            binding.screenHeader,
+            if (advancedSyncMode) "Drive avanzado" else getString(R.string.settings_title)
+        ) { finish() }
+        binding.contentContainer.addView(screen, FrameLayout.LayoutParams(-1, -2))
+        applyInsets(binding.rootContainer)
+        setContentView(binding.root)
         AppThemePalette.apply(this)
     }
 
