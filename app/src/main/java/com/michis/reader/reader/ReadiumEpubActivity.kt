@@ -21,6 +21,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.net.Uri
@@ -126,8 +127,14 @@ class ReadiumEpubActivity : FragmentActivity() {
         binding.documentTitle.text = document.title
         binding.backButton.setOnClickListener { finish() }
         binding.toolsButton.setOnClickListener { showEpubMoreMenu() }
+        binding.contentsButton.setOnClickListener { toggleContentsPanel() }
+        binding.quotesButton.setOnClickListener { openBookQuotes() }
         dictionaryButton = binding.dictionaryButton.apply { setOnClickListener { openDictionary() } }
+        binding.bookmarkButton.setOnClickListener { saveCurrentBookmark() }
         binding.readingSettingsButton.setOnClickListener { toggleSettingsPanel() }
+        val landscapeLayout = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        binding.toolsButton.visibility = if (landscapeLayout) View.GONE else View.VISIBLE
+        binding.landscapeToolsContainer.visibility = if (landscapeLayout) View.VISIBLE else View.GONE
         binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
         return binding.root
     }
