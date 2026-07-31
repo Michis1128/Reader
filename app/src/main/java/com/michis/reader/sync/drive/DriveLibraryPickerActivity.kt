@@ -1,24 +1,18 @@
 package com.michis.reader.sync.drive
 
-import com.michis.reader.R
+import com.michis.reader.databinding.ActivityDriveLibraryPickerBinding
+import com.michis.reader.databinding.ItemDriveLibrarySourceBinding
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.theme.AppThemePalette
 import com.michis.reader.ui.ScreenHeader
 
-import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
-import android.view.WindowInsets
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -31,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class DriveLibraryPickerActivity : ComponentActivity() {
+    private lateinit var binding: ActivityDriveLibraryPickerBinding
     private val repository by lazy { GoogleDriveBookLibraryRepository(this) }
     private lateinit var accountIdentifier: String
     private lateinit var accessToken: String
@@ -60,53 +55,40 @@ class DriveLibraryPickerActivity : ComponentActivity() {
         repository.selectedSources(accountIdentifier).forEach {
             selectedIdentifiers += it.identifier; selectedSources[it.identifier] = it
         }
-        setContentView(buildScreen()); AppThemePalette.apply(this)
+        binding = ActivityDriveLibraryPickerBinding.inflate(layoutInflater)
+        configureScreen()
+        setContentView(binding.root)
+        AppThemePalette.apply(this)
         loadSources()
     }
 
-    private fun buildScreen(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(14), dp(10), dp(14), dp(14))
-        AppThemePalette.markBackground(this)
-        ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+    private fun configureScreen() {
+        AppThemePalette.markBackground(binding.rootContainer)
+        ScreenHeader.configure(this, binding.screenHeader, "Biblioteca de Google Drive") { finish() }
+        binding.selectionDescription.text =
+            "Selecciona carpetas completas, libros EPUB individuales o una combinación de ambos."
+        listContainer = binding.listContainer
+        resultCount = binding.resultCount
+        locationText = binding.locationText
+        locationText.setOnClickListener { navigateBack() }
+        binding.searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) =
+                renderSources(s?.toString().orEmpty())
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        binding.applySelectionButton.setOnClickListener {
+            repository.saveSelectedSources(accountIdentifier, selectedSources.values)
+            AutomaticDriveSyncScheduler(this).enqueueImmediateSync()
+            setResult(RESULT_OK)
+            Toast.makeText(this, "Biblioteca de Drive actualizada", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootContainer) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(dp(14), bars.top + dp(10), dp(14), bars.bottom + dp(10))
             insets
         }
-        addView(ScreenHeader.create(this@DriveLibraryPickerActivity, "Biblioteca de Google Drive") { finish() }.root)
-        addView(TextView(context).apply {
-            text = "Selecciona carpetas completas, libros EPUB individuales o una combinación de ambos."
-            textSize = 15f; setTextColor(Color.DKGRAY); setPadding(dp(4), 0, dp(4), dp(12))
-        })
-        locationText = TextView(context).apply {
-            text = "Mi unidad"; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(92, 73, 122)); setPadding(dp(4), 0, dp(4), dp(10))
-            setOnClickListener { navigateBack() }
-        }
-        addView(locationText)
-        val search = EditText(context).apply {
-            hint = "Buscar carpetas o libros EPUB"; isSingleLine = true
-            background = AppThemePalette.cardBackground(this@DriveLibraryPickerActivity, 14f)
-            setPadding(dp(16), dp(10), dp(16), dp(10))
-        }
-        addView(search, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(10) })
-        resultCount = TextView(context).apply { textSize = 13f; setTextColor(Color.DKGRAY); setPadding(dp(4), 0, 0, dp(8)) }
-        addView(resultCount)
-        listContainer = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        addView(ScrollView(context).apply { addView(listContainer) }, LinearLayout.LayoutParams(-1, 0, 1f))
-        addView(Button(context).apply {
-            text = "Aplicar selección"; isAllCaps = false; textSize = 16f
-            setOnClickListener {
-                repository.saveSelectedSources(accountIdentifier, selectedSources.values)
-                AutomaticDriveSyncScheduler(this@DriveLibraryPickerActivity).enqueueImmediateSync()
-                setResult(RESULT_OK); Toast.makeText(context, "Biblioteca de Drive actualizada", Toast.LENGTH_SHORT).show(); finish()
-            }
-        }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(10) })
-        search.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderSources(s?.toString().orEmpty())
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
     }
 
     private fun loadSources() {
@@ -125,33 +107,33 @@ class DriveLibraryPickerActivity : ComponentActivity() {
         val visible = allSources.filter { it.name.contains(query.trim(), ignoreCase = true) }
         resultCount.text = "${selectedIdentifiers.size} seleccionados · ${visible.size} resultados"
         visible.forEach { source ->
-            listContainer.addView(LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL; background = AppThemePalette.cardBackground(this@DriveLibraryPickerActivity, 13f)
-                AppThemePalette.markCard(this)
-                val selector = CheckBox(context).apply {
-                    isChecked = source.identifier in selectedIdentifiers
-                    buttonTintList = android.content.res.ColorStateList.valueOf(Color.rgb(92, 73, 122))
-                    setOnCheckedChangeListener { _, checked ->
-                        if (checked) {
-                            selectedIdentifiers += source.identifier; selectedSources[source.identifier] = source
-                        } else {
-                            selectedIdentifiers -= source.identifier; selectedSources.remove(source.identifier)
-                        }
-                        resultCount.text = "${selectedIdentifiers.size} seleccionados · ${visible.size} elementos"
+            val itemBinding = ItemDriveLibrarySourceBinding.inflate(layoutInflater, listContainer, false)
+            itemBinding.sourceCheckbox.apply {
+                isChecked = source.identifier in selectedIdentifiers
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) {
+                        selectedIdentifiers += source.identifier
+                        selectedSources[source.identifier] = source
+                    } else {
+                        selectedIdentifiers -= source.identifier
+                        selectedSources.remove(source.identifier)
                     }
+                    resultCount.text = "${selectedIdentifiers.size} seleccionados · ${visible.size} elementos"
                 }
-                addView(selector, LinearLayout.LayoutParams(dp(48), -1))
-                addView(TextView(context).apply {
-                    text = "${if (source.isFolder) "📁" else "📄"}  ${source.name}"
-                    textSize = 15f; gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(4), 0, dp(8), 0)
-                    setOnClickListener { if (source.isFolder) enterFolder(source) else selector.toggle() }
-                }, LinearLayout.LayoutParams(0, -1, 1f))
-                if (source.isFolder) addView(TextView(context).apply {
-                    text = "›"; textSize = 30f; gravity = Gravity.CENTER
-                    setTextColor(Color.rgb(92, 73, 122)); setOnClickListener { enterFolder(source) }
-                }, LinearLayout.LayoutParams(dp(48), -1))
-            }, LinearLayout.LayoutParams(-1, dp(58)).apply { bottomMargin = dp(7) })
+            }
+            itemBinding.sourceIcon.text = if (source.isFolder) "📁" else "📄"
+            itemBinding.sourceName.apply {
+                text = source.name
+                setOnClickListener {
+                    if (source.isFolder) enterFolder(source) else itemBinding.sourceCheckbox.toggle()
+                }
+            }
+            itemBinding.navigationArrow.apply {
+                visibility = if (source.isFolder) View.VISIBLE else View.GONE
+                setOnClickListener { enterFolder(source) }
+            }
+            AppThemePalette.markCard(itemBinding.root)
+            listContainer.addView(itemBinding.root)
         }
         if (visible.isEmpty()) listContainer.addView(message("No hay resultados"))
         AppThemePalette.apply(this)
