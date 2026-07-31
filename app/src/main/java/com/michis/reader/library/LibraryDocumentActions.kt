@@ -1,17 +1,12 @@
 package com.michis.reader.library
 
 import com.michis.reader.data.*
+import com.michis.reader.databinding.DialogEditBookMetadataBinding
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.sync.drive.*
-import com.michis.reader.theme.AppThemePalette
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.graphics.Color
-import android.graphics.Typeface
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 
 /** Acciones destructivas y de mantenimiento disponibles al mantener pulsado un libro. */
@@ -59,28 +54,21 @@ internal class LibraryDocumentActions(
     }
 
     private fun editMetadata(document: LibraryDocument) {
-        val titleInput = EditText(activity).apply {
-            hint = "Título"; setText(document.title); selectAll(); isSingleLine = true
+        val binding = DialogEditBookMetadataBinding.inflate(activity.layoutInflater).apply {
+            titleInput.setText(document.title)
+            titleInput.selectAll()
+            authorInput.setText(document.author)
+            originalFileText.text = "Archivo original: ${document.fileName}"
         }
-        val authorInput = EditText(activity).apply {
-            hint = "Autor"; setText(document.author); isSingleLine = true
-        }
-        val form = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), 0)
-            addView(label("Título")); addView(titleInput)
-            addView(label("Autor").apply { setPadding(0, dp(14), 0, 0) }); addView(authorInput)
-            addView(TextView(context).apply {
-                text = "Archivo original: ${document.fileName}"; textSize = 12f
-                setTextColor(Color.GRAY); setPadding(0, dp(14), 0, 0)
-            })
-        }
-        AlertDialog.Builder(activity).setTitle("Editar metadatos").setView(form)
+        AlertDialog.Builder(activity).setTitle("Editar metadatos").setView(binding.root)
             .setPositiveButton("Guardar") { _, _ ->
-                if (titleInput.text.isNullOrBlank()) {
+                if (binding.titleInput.text.isNullOrBlank()) {
                     message("El título no puede estar vacío")
                 } else {
                     database.updateDocumentMetadata(
-                        document.identifier, titleInput.text.toString(), authorInput.text.toString()
+                        document.identifier,
+                        binding.titleInput.text.toString(),
+                        binding.authorInput.text.toString()
                     )
                     refreshLibrary()
                     message("Metadatos actualizados")
@@ -101,13 +89,7 @@ internal class LibraryDocumentActions(
             }.setNegativeButton("Cancelar", null).show()
     }
 
-    private fun label(value: String) = TextView(activity).apply {
-        text = value; typeface = Typeface.DEFAULT_BOLD
-    }
-
     private fun message(value: String, long: Boolean = false) = Toast.makeText(
         activity, value, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
     ).show()
-
-    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 }
