@@ -79,6 +79,19 @@ class ReaderDatabaseTest {
     }
 
     @Test
+    fun deletingDictionaryCategoryAlsoDeletesItsEntries() {
+        val documentIdentifier = database.saveDocument("content://books/delete-dictionary.epub", "delete-dictionary.epub")
+        val categoryIdentifier = database.createDictionaryCategory(documentIdentifier, "Personajes")
+        database.saveDictionaryEntry(documentIdentifier, categoryIdentifier, "Alicia", "Protagonista", "")
+
+        database.deleteDictionaryCategory(categoryIdentifier)
+
+        assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
+        assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
+        assertTrue(database.syncTombstones().count { it.entityType in setOf("dictionary_category", "dictionary_entry") } >= 2)
+    }
+
+    @Test
     fun remoteDeletionDoesNotOverwriteNewerLocalAnnotation() {
         val documentIdentifier = database.saveDocument("content://books/sync.epub", "sync.epub")
         database.addAnnotation(documentIdentifier, "cita", "Texto local", "", 0, 10, 1)
@@ -97,6 +110,25 @@ class ReaderDatabaseTest {
         assertEquals(0, result.appliedDeletions)
         assertEquals(1, result.ignoredLocalNewer)
         assertEquals(1, database.annotations(documentIdentifier).size)
+    }
+
+    @Test
+    fun restoredInstallationAcceptsRemoteProgressEvenWhenImportedBookHasNewerMetadata() {
+        val documentIdentifier = database.saveDocument("content://books/restored.epub", "restored.epub")
+        val localMetadata = database.documentSyncMetadata(documentIdentifier)
+        val remoteState = JSONObject().apply {
+            put("updatedAt", localMetadata.updatedAt - 10_000L)
+            put("progress", 0.62)
+            put("readerLocation", 318)
+            put("lastOpenedAt", localMetadata.updatedAt - 20_000L)
+            put("annotations", JSONArray())
+        }
+
+        val result = database.mergeReadingState(listOf(documentIdentifier to remoteState))
+
+        assertEquals(1, result.progressUpdates)
+        assertEquals(318, database.readerLocation(documentIdentifier))
+        assertEquals(0.62f, requireNotNull(database.findDocument(documentIdentifier)).progress, 0.001f)
     }
 
     @Test

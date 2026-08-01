@@ -2,6 +2,7 @@ package com.michis.reader.app
 
 import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ActivityMainBinding
 import com.michis.reader.library.*
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.settings.SettingsActivity
@@ -10,11 +11,8 @@ import com.michis.reader.theme.AppThemePalette
 
 import android.app.AlertDialog
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
@@ -22,6 +20,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : ComponentActivity() {
+    private lateinit var binding: ActivityMainBinding
     private lateinit var database: ReaderDatabase
     private lateinit var documentList: LinearLayout
     private lateinit var emptyMessage: TextView
@@ -64,7 +63,9 @@ class MainActivity : ComponentActivity() {
         })
         database = ReaderDatabase.getInstance(this)
         libraryBrowserState = LibraryBrowserState(this, database)
-        val mainScreen = buildScreen()
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        configureScreen()
+        val mainScreen = binding.root
         libraryViewRenderer = LibraryViewRenderer(
             this, database, documentList, ::navigateToParentFolder, ::openLibraryFolder, ::openReader,
             ::showDocumentActions, ::moveLibraryItem
@@ -95,6 +96,31 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun configureScreen() {
+        AppThemePalette.markBackground(binding.rootContainer)
+        documentList = binding.documentList
+        emptyMessage = binding.emptyMessage
+        searchInput = binding.searchInput
+        libraryDisplayButton = binding.libraryDisplayButton.apply { text = displayModeIcon() }
+        libraryFilterButton = binding.libraryFilterButton.apply {
+            text = "Filtro: ${libraryBrowserState.sortMode.label}"
+        }
+        syncStatusText = binding.syncStatusText
+        syncButton = binding.syncButton
+        libraryPathText = binding.libraryPathText
+        syncButton.setOnClickListener { syncController.synchronize() }
+        binding.settingsButton.setOnClickListener { showGeneralSettings() }
+        binding.importButton.setOnClickListener { showImportMenu() }
+        searchInput.addTextChangedListener(SimpleTextWatcher { refreshLibrary(it) })
+        binding.libraryTabButton.setOnClickListener { openLibraryRoot() }
+        binding.quotesTabButton.setOnClickListener { showAnnotations("cita") }
+        binding.bookmarksTabButton.setOnClickListener { showAnnotations("marcador") }
+        binding.dictionariesTabButton.setOnClickListener { showDictionaries() }
+        libraryDisplayButton.setOnClickListener { cycleLibraryDisplayMode() }
+        libraryFilterButton.setOnClickListener { showLibraryFilters() }
+        libraryPathText.setOnClickListener { navigateToParentFolder() }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         importCoordinator.importIncoming(intent)
@@ -104,73 +130,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         AppThemePalette.apply(this)
         if (::syncController.isInitialized) syncController.refreshStatus()
-    }
-
-    private fun buildScreen(): View = verticalLayout {
-        setPadding(dp(16), dp(14), dp(16), 0)
-        AppThemePalette.markBackground(this)
-        addView(horizontalLayout {
-            addView(TextView(context).apply {
-                text = "Mi biblioteca"; textSize = 30f; setTextColor(Color.rgb(25, 27, 33)); typeface = android.graphics.Typeface.DEFAULT_BOLD
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            syncButton = Button(context).apply {
-                text = "↻"; contentDescription = "Sincronizar ahora"; textSize = 20f; minWidth = 0
-                setOnClickListener { syncController.synchronize() }
-            }
-            addView(syncButton)
-            addView(Button(context).apply {
-                text = "⚙"; contentDescription = "Configuración"; textSize = 20f; minWidth = 0
-                setOnClickListener { showGeneralSettings() }
-            })
-        })
-        addView(TextView(context).apply {
-            text = "Tus lecturas, disponibles sin conexión"; textSize = 15f; setTextColor(Color.DKGRAY
-            ); setPadding(0, dp(4), 0, dp(16))
-        })
-        syncStatusText = TextView(context).apply {
-            textSize = 12f; setTextColor(Color.DKGRAY); setPadding(0, 0, 0, dp(8))
-        }
-        addView(syncStatusText)
-        addView(horizontalLayout {
-            searchInput = EditText(context).apply {
-                hint = "Buscar por título, autor o archivo EPUB"; setSingleLine(); setBackgroundResource(R.drawable.rounded_panel)
-                addTextChangedListener(SimpleTextWatcher { refreshLibrary(it) })
-            }
-            addView(searchInput, LinearLayout.LayoutParams(0, dp(54), 1f))
-            addView(Button(context).apply {
-                text = "+"; contentDescription = "Importar"; textSize = 22f; minWidth = 0
-                setOnClickListener { showImportMenu() }
-            }, LinearLayout.LayoutParams(dp(52), dp(54)).apply { marginStart = dp(8) })
-        })
-        addView(HorizontalScrollView(context).apply { isHorizontalScrollBarEnabled = false; addView(horizontalLayout {
-            setPadding(0, dp(12), 0, dp(12))
-            addView(tabButton("Biblioteca") { openLibraryRoot() })
-            addView(tabButton("Citas") { showAnnotations("cita") })
-            addView(tabButton("Marcadores") { showAnnotations("marcador") })
-            addView(tabButton("Diccionarios") { showDictionaries() })
-            libraryDisplayButton = tabButton(displayModeIcon()) { cycleLibraryDisplayMode() }
-            addView(libraryDisplayButton)
-            libraryFilterButton = tabButton("Filtro: ${libraryBrowserState.sortMode.label}") { showLibraryFilters() }
-            addView(libraryFilterButton)
-        }) })
-        libraryPathText = TextView(context).apply {
-            text = "Mi biblioteca"; textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(92, 73, 122)); setPadding(dp(6), dp(2), dp(6), dp(10))
-            setOnClickListener { navigateToParentFolder() }
-        }
-        addView(libraryPathText)
-        val scroll = ScrollView(context).apply { clipToPadding = false; setPadding(0, dp(4), 0, dp(6)) }
-        documentList = verticalLayout { clipChildren = false; clipToPadding = false }
-        emptyMessage = TextView(context).apply {
-            text = "Aún no hay libros EPUB.\nImporta uno para comenzar."; textSize = 18f; gravity = Gravity.CENTER
-            setTextColor(Color.GRAY); setPadding(dp(20), dp(80), dp(20), dp(30))
-        }
-        scroll.addView(documentList)
-        addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-    }
-
-    private fun tabButton(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; textSize = 12f; isAllCaps = false; setOnClickListener { action() }
     }
 
     private fun openDocumentPicker() {
@@ -274,8 +233,6 @@ class MainActivity : ComponentActivity() {
         }
         startActivity(Intent(this, ReadiumEpubActivity::class.java).putExtra("document_identifier", identifier))
     }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-
     private fun applySafeSystemBarPadding(view: View) {
         val originalLeft = view.paddingLeft
         val originalTop = view.paddingTop
@@ -307,9 +264,6 @@ class MainActivity : ComponentActivity() {
         }
         view.requestApplyInsets()
     }
-    private fun verticalLayout(block: LinearLayout.() -> Unit) = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; block() }
-    private fun horizontalLayout(block: LinearLayout.() -> Unit) = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; block() }
-
 }
 
 private class SimpleTextWatcher(private val changed: (String) -> Unit) : android.text.TextWatcher {

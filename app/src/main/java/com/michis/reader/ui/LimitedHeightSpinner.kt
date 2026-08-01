@@ -4,6 +4,7 @@ import com.michis.reader.theme.AppThemePalette
 
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
+import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -15,7 +16,11 @@ import android.widget.SpinnerAdapter
 import android.widget.TextView
 
 /** Spinner cuyo desplegable muestra como máximo cuatro opciones antes de desplazarse. */
-class LimitedHeightSpinner(context: Context) : Spinner(context, MODE_DROPDOWN) {
+class LimitedHeightSpinner @JvmOverloads constructor(
+    context: Context,
+    attributes: AttributeSet? = null,
+    defaultStyleAttribute: Int = android.R.attr.spinnerStyle
+) : Spinner(context, attributes, defaultStyleAttribute, MODE_DROPDOWN) {
     private var optionsPopup: PopupWindow? = null
 
     override fun performClick(): Boolean {

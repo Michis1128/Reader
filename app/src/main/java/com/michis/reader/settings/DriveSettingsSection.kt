@@ -1,26 +1,24 @@
 package com.michis.reader.settings
 
-import com.michis.reader.R
+import com.michis.reader.databinding.ViewAutomaticSyncControlsBinding
+import com.michis.reader.databinding.ViewDriveSettingsPanelBinding
+import com.michis.reader.databinding.ViewGoogleAccountHeaderBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
+import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.sync.*
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
-import com.michis.reader.ui.LimitedHeightSpinner
 
 import android.app.Activity
 import android.content.Intent
 import android.graphics.BitmapFactory
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
-import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.Switch
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.IntentSenderRequest
@@ -69,9 +67,10 @@ class DriveSettingsSection(
         callback?.invoke(authorization)
     }
 
-    fun createPanel(): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
-        render(this)
+    fun createPanel(): View {
+        val binding = ViewDriveSettingsPanelBinding.inflate(activity.layoutInflater)
+        render(binding.panelContainer)
+        return binding.root
     }
 
     private fun render(container: LinearLayout) {
@@ -80,8 +79,7 @@ class DriveSettingsSection(
         val session = accountManager.currentSession()
         if (session == null) {
             container.addView(description("La lectura local no requiere una cuenta. Google se utilizará únicamente si decides activar la sincronización."))
-            container.addView(Button(activity).apply {
-                text = "Iniciar sesión con Google"; isAllCaps = false
+            container.addView(actionButton("Iniciar sesión con Google") {
                 setOnClickListener {
                     isEnabled = false
                     activity.lifecycleScope.launch {
@@ -125,9 +123,9 @@ class DriveSettingsSection(
                 container.addView(description("Carpeta vinculada: ${savedFolder.name}"))
                 lastFullSyncText?.let { container.addView(description(it)) }
             }
-            if (advancedMode || savedFolder == null) container.addView(Button(activity).apply {
-                text = if (savedFolder == null) "Preparar carpeta Michis Reader" else "Verificar carpeta Michis Reader"
-                isAllCaps = false
+            if (advancedMode || savedFolder == null) container.addView(actionButton(
+                if (savedFolder == null) "Preparar carpeta Michis Reader" else "Verificar carpeta Michis Reader"
+            ) {
                 setOnClickListener {
                     isEnabled = false
                     prepareFolder(session, authorizationManager, folderRepository, container, this)
@@ -139,9 +137,9 @@ class DriveSettingsSection(
                 if (selectedSources.isEmpty()) "Todavía no has elegido libros o carpetas de Drive."
                 else "Biblioteca de Drive: ${selectedSources.size} elementos seleccionados"
             ))
-            container.addView(Button(activity).apply {
-                text = if (selectedSources.isEmpty()) "Elegir libros y carpetas" else "Editar libros y carpetas"
-                isAllCaps = false
+            container.addView(actionButton(
+                if (selectedSources.isEmpty()) "Elegir libros y carpetas" else "Editar libros y carpetas"
+            ) {
                 setOnClickListener {
                     isEnabled = false
                     chooseLibrarySources(session, authorizationManager, container, this)
@@ -151,13 +149,12 @@ class DriveSettingsSection(
                 if (advancedMode && fullSyncConfirmationArmed) container.addView(description(
                     "Se descargarán y fusionarán los datos más recientes, se aplicarán eliminaciones válidas y después se subirá el resultado combinado."
                 ))
-                container.addView(Button(activity).apply {
-                    text = when {
+                container.addView(actionButton(when {
                         fullSyncInProgress -> "Sincronizando…"
                         advancedMode && fullSyncConfirmationArmed -> "Confirmar sincronización"
                         else -> "Sincronizar ahora"
-                    }
-                    isAllCaps = false; isEnabled = !fullSyncInProgress
+                    }) {
+                    isEnabled = !fullSyncInProgress
                     setOnClickListener {
                         if (advancedMode && !fullSyncConfirmationArmed) {
                             fullSyncConfirmationArmed = true
@@ -170,8 +167,7 @@ class DriveSettingsSection(
                 })
                 container.addView(automaticSyncControls())
             }
-            if (advancedMode) container.addView(Button(activity).apply {
-                text = "Revocar acceso a Google Drive"; isAllCaps = false
+            if (advancedMode) container.addView(actionButton("Revocar acceso a Google Drive") {
                 setOnClickListener {
                     isEnabled = false
                     authorizationManager.authorizationClient
@@ -190,16 +186,14 @@ class DriveSettingsSection(
             })
         } else {
             container.addView(description("Google Drive todavía no está autorizado. El permiso permite leer la biblioteca EPUB que elijas y mantener sincronizados sus libros."))
-            container.addView(Button(activity).apply {
-                text = "Activar sincronización con Drive"; isAllCaps = false
+            container.addView(actionButton("Activar sincronización con Drive") {
                 setOnClickListener {
                     isEnabled = false
                     requestAuthorization(session, authorizationManager, container, this)
                 }
             })
         }
-        container.addView(Button(activity).apply {
-            text = "Cerrar sesión"; isAllCaps = false
+        container.addView(actionButton("Cerrar sesión") {
             setOnClickListener {
                 isEnabled = false
                 activity.lifecycleScope.launch {
@@ -210,31 +204,18 @@ class DriveSettingsSection(
                 }
             }
         })
-        if (!advancedMode) container.addView(Button(activity).apply {
-            text = "Ajustes avanzados de Drive"; isAllCaps = false; setOnClickListener { openAdvancedSettings() }
+        if (!advancedMode) container.addView(actionButton("Ajustes avanzados de Drive") {
+            setOnClickListener { openAdvancedSettings() }
         })
     }
 
-    private fun accountHeader(session: GoogleAccountSession) = LinearLayout(activity).apply {
-        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(2), dp(4), dp(2), dp(10))
-        val picture = ImageView(activity).apply {
-            contentDescription = "Foto de perfil de Google"; scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(android.R.drawable.ic_menu_myplaces)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL; setColor(AppThemePalette.current(activity).card)
-            }
-            clipToOutline = true
-        }
-        addView(picture, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(12) })
-        addView(LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(activity).apply {
-                text = session.displayName.ifBlank { "Cuenta de Google" }; textSize = 18f
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            })
-            addView(TextView(activity).apply { text = session.accountIdentifier; setPadding(0, dp(3), 0, 0) })
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        loadProfilePicture(picture, session.profilePictureUri)
+    private fun accountHeader(session: GoogleAccountSession): View {
+        val binding = ViewGoogleAccountHeaderBinding.inflate(activity.layoutInflater)
+        binding.displayName.text = session.displayName.ifBlank { "Cuenta de Google" }
+        binding.accountIdentifier.text = session.accountIdentifier
+        binding.profilePicture.background = AppThemePalette.cardBackground(activity, 26f)
+        loadProfilePicture(binding.profilePicture, session.profilePictureUri)
+        return binding.root
     }
 
     private fun requestAuthorization(
@@ -323,18 +304,22 @@ class DriveSettingsSection(
         activity.lifecycleScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    GoogleDriveSyncCoordinator(activity).synchronize(accessToken, session.accountIdentifier, folder, repository)
+                    GoogleDriveSyncCoordinator(activity).synchronize(
+                        accessToken, session.accountIdentifier, folder, repository
+                    ) { step ->
+                        activity.runOnUiThread {
+                            lastFullSyncText = step
+                            render(container)
+                        }
+                    }
                 }
             }.onSuccess { synced ->
                 fullSyncInProgress = false; fullSyncConfirmationArmed = false
                 lastFullSyncText = if (synced.firstBackup) {
                     "Sincronización inicial completada: ${synced.documentCount} libros respaldados."
                 } else {
-                    "Sincronización completada: ${synced.documentCount} libros; " +
-                        "${synced.readingMerge.progressUpdates} progresos, " +
-                        "${synced.readingMerge.insertedAnnotations + synced.readingMerge.updatedAnnotations} citas/marcadores, " +
-                        "${synced.dictionaryMerge.insertedEntries + synced.dictionaryMerge.updatedEntries} entradas y " +
-                        "${synced.deletionMerge.appliedDeletions} eliminaciones."
+                    "Sincronización incremental completada: ${synced.documentCount} libros registrados y " +
+                        "${synced.downloadedDocumentCount} EPUB nuevos o modificados descargados."
                 }
                 render(container); Toast.makeText(activity, "Sincronización verificada", Toast.LENGTH_LONG).show()
             }.onFailure { error ->
@@ -344,17 +329,15 @@ class DriveSettingsSection(
         }
     }
 
-    private fun automaticSyncControls(): View = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL
+    private fun automaticSyncControls(): View {
+        val binding = ViewAutomaticSyncControlsBinding.inflate(activity.layoutInflater)
         val scheduler = AutomaticDriveSyncScheduler(activity)
-        addView(fieldTitle("Sincronización automática"))
-        addView(Switch(activity).apply {
-            text = "Sincronizar cuando haya conexión"; isChecked = scheduler.isEnabled()
+        binding.automaticSyncSwitch.apply {
+            isChecked = scheduler.isEnabled()
             setOnCheckedChangeListener { _, enabled -> scheduler.setEnabled(enabled) }
-        })
-        addView(fieldTitle("Frecuencia"))
+        }
         val intervals = listOf(15L, 60L, 360L, 1_440L)
-        addView(LimitedHeightSpinner(activity).apply {
+        binding.frequencySpinner.apply {
             adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item,
                 listOf("Cada 15 minutos", "Cada hora", "Cada 6 horas", "Cada 24 horas"))
             setSelection(intervals.indexOf(scheduler.intervalMinutes()).coerceAtLeast(0))
@@ -364,13 +347,13 @@ class DriveSettingsSection(
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        })
-        addView(fieldTitle("Tipo de conexión"))
-        addView(Switch(activity).apply {
-            text = "Sincronizar solo con Wi-Fi"; isChecked = scheduler.wifiOnly()
+        }
+        binding.wifiOnlySwitch.apply {
+            isChecked = scheduler.wifiOnly()
             setOnCheckedChangeListener { _, checked -> scheduler.setWifiOnly(checked) }
-        })
-        addView(description("Último estado: ${scheduler.lastStatus()}"))
+        }
+        binding.lastStatusText.text = "Último estado: ${scheduler.lastStatus()}"
+        return binding.root
     }
 
     private fun loadProfilePicture(target: ImageView, value: String) {
@@ -389,14 +372,13 @@ class DriveSettingsSection(
         }
     }
 
-    private fun fieldTitle(value: String) = TextView(activity).apply {
-        text = value; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setPadding(dp(2), dp(10), dp(2), dp(5))
+    private fun actionButton(value: String, configure: Button.() -> Unit): View {
+        val binding = ViewActionButtonBinding.inflate(activity.layoutInflater)
+        binding.actionButton.text = value
+        binding.actionButton.configure()
+        return binding.root
     }
 
-    private fun description(value: String) = TextView(activity).apply {
-        text = value; setPadding(dp(2), dp(4), dp(2), dp(7))
-    }
-
-    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+    private fun description(value: String) =
+        ViewSettingsDescriptionBinding.inflate(activity.layoutInflater).root.apply { text = value }
 }

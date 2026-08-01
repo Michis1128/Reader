@@ -17,6 +17,7 @@ configure<ApplicationExtension> {
 
     buildFeatures {
         compose = true
+        viewBinding = true
     }
 
     testOptions {

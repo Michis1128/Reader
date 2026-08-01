@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="@dimen/ui_content_spacing"
+    android:background="@drawable/background_card"
+    android:clickable="true"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/ui_card_padding_horizontal"
+    android:paddingTop="@dimen/ui_card_padding_vertical"
+    android:paddingEnd="@dimen/ui_card_padding_horizontal"
+    android:paddingBottom="@dimen/ui_card_padding_vertical">
+
+    <TextView
+        android:id="@+id/categoryName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/categoryHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="@dimen/ui_content_spacing_small"
+        android:text="Toca para abrir" />
+</LinearLayout>

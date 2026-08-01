@@ -2,25 +2,23 @@
 
 package com.michis.reader.reader
 
-import com.michis.reader.R
+import com.michis.reader.databinding.ItemEpubSettingsFamilyBinding
+import com.michis.reader.databinding.PanelEpubSettingsBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
+import com.michis.reader.databinding.ViewEpubSettingsLabelBinding
+import com.michis.reader.databinding.ViewEpubSettingsSliderBinding
+import com.michis.reader.databinding.ViewEpubSettingsToggleBinding
+import com.michis.reader.databinding.ViewNumberStepperBinding
 import com.michis.reader.settings.*
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.text.InputType
-import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Spinner
-import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
 import org.readium.r2.navigator.epub.EpubPreferences
@@ -37,13 +35,15 @@ class EpubReadingSettingsPanel(
     private val selectFont: () -> Unit,
     private val closePanel: () -> Unit
 ) {
+    private lateinit var familyContainer: LinearLayout
+
     fun create(): View {
         val preferences = settings.preferences
-        val content = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(18))
-            tag = ReaderMenuTags.SURFACE
-            addView(header("Lectura", "Cerrar", closePanel))
+        val panelBinding = PanelEpubSettingsBinding.inflate(activity.layoutInflater)
+        panelBinding.panelContainer.tag = ReaderMenuTags.SURFACE
+        panelBinding.closeButton.setOnClickListener { closePanel() }
+        familyContainer = panelBinding.familyContainer
+        familyContainer.apply {
             addView(family("Texto y tipografía") {
                 addView(label("Tamaño de letra (dp)"))
                 addView(numberStepper(settings.fontSizeDp.toDouble(), 8.0, 72.0, 1.0) { value ->
@@ -51,9 +51,7 @@ class EpubReadingSettingsPanel(
                     submitPreferences(EpubPreferences(fontSize = value / 16.0))
                 })
                 addView(label("Tipo de fuente"))
-                addView(Button(activity).apply {
-                    text = "Seleccionar fuente…"; isAllCaps = false; setOnClickListener { selectFont() }
-                })
+                addView(actionButton("Seleccionar fuente…") { selectFont() })
                 addView(label("Grosor de fuente"))
                 val currentWeight = preferences.getFloat(KEY_FONT_WEIGHT, 1f).coerceIn(0.5f, 2f)
                 addView(slider(100, (((currentWeight - 0.5f) / 1.5f) * 100).toInt()) { progress ->
@@ -79,33 +77,28 @@ class EpubReadingSettingsPanel(
                     preferences.edit().putBoolean(KEY_CONTINUOUS_SCROLL, index == 1).apply()
                     submitPreferences(EpubPreferences(scroll = index == 1))
                 })
-                addView(CheckBox(activity).apply {
-                    text = "Animar cambios de página"; isChecked = preferences.getBoolean(KEY_PAGE_ANIMATIONS, true)
-                    setOnCheckedChangeListener { _, checked ->
-                        preferences.edit().putBoolean(KEY_PAGE_ANIMATIONS, checked).apply()
-                        if (checked && preferences.getBoolean(KEY_CONTINUOUS_SCROLL, false)) {
-                            Toast.makeText(activity, "La animación se muestra en modo Paginado", Toast.LENGTH_LONG).show()
-                        }
+                addView(toggle("Animar cambios de página", preferences.getBoolean(KEY_PAGE_ANIMATIONS, true)) { checked ->
+                    preferences.edit().putBoolean(KEY_PAGE_ANIMATIONS, checked).apply()
+                    if (checked && preferences.getBoolean(KEY_CONTINUOUS_SCROLL, false)) {
+                        Toast.makeText(activity, "La animación se muestra en modo Paginado", Toast.LENGTH_LONG).show()
                     }
                 })
-                addView(CheckBox(activity).apply {
-                    text = "Mostrar dos páginas en horizontal"
-                    isChecked = preferences.getBoolean(KEY_TWO_PAGES_LANDSCAPE,
-                        activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE)
-                    setOnCheckedChangeListener { _, checked ->
-                        preferences.edit().putBoolean(KEY_TWO_PAGES_LANDSCAPE, checked).apply()
-                        submitPreferences(EpubPreferences(
-                            columnCount = if (checked) ColumnCount.TWO else ColumnCount.ONE,
-                            spread = if (checked) Spread.ALWAYS else Spread.NEVER
-                        ))
-                    }
+                addView(toggle(
+                    "Mostrar dos páginas en horizontal",
+                    preferences.getBoolean(
+                        KEY_TWO_PAGES_LANDSCAPE,
+                        activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                    )
+                ) { checked ->
+                    preferences.edit().putBoolean(KEY_TWO_PAGES_LANDSCAPE, checked).apply()
+                    submitPreferences(EpubPreferences(
+                        columnCount = if (checked) ColumnCount.TWO else ColumnCount.ONE,
+                        spread = if (checked) Spread.ALWAYS else Spread.NEVER
+                    ))
                 })
-                addView(CheckBox(activity).apply {
-                    text = "Activar márgenes de página"; isChecked = preferences.getBoolean(KEY_PAGE_MARGINS, true)
-                    setOnCheckedChangeListener { _, checked ->
-                        preferences.edit().putBoolean(KEY_PAGE_MARGINS, checked).apply()
-                        submitPreferences(EpubPreferences(pageMargins = if (checked) 1.0 else 0.0))
-                    }
+                addView(toggle("Activar márgenes de página", preferences.getBoolean(KEY_PAGE_MARGINS, true)) { checked ->
+                    preferences.edit().putBoolean(KEY_PAGE_MARGINS, checked).apply()
+                    submitPreferences(EpubPreferences(pageMargins = if (checked) 1.0 else 0.0))
                 })
             })
             addView(family("Pantalla") {
@@ -120,41 +113,38 @@ class EpubReadingSettingsPanel(
                 })
             })
             addView(family("Aplicación") {
-                addView(Button(activity).apply {
-                    text = "Configuración general"; isAllCaps = false
-                    setOnClickListener { activity.startActivity(Intent(activity, SettingsActivity::class.java)) }
+                addView(actionButton("Configuración general") {
+                    activity.startActivity(Intent(activity, SettingsActivity::class.java))
                 })
             })
         }
-        return ScrollView(activity).apply { isFillViewport = true; addView(content) }
+        return panelBinding.root
     }
 
     private fun numberStepper(initial: Double, minimum: Double, maximum: Double, step: Double, changed: (Double) -> Unit): View {
         var value = initial.coerceIn(minimum, maximum)
-        val input = EditText(activity).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(format(value)); gravity = Gravity.CENTER; setSingleLine()
-        }
+        val binding = ViewNumberStepperBinding.inflate(activity.layoutInflater)
+        val input = binding.valueInput.apply { setText(format(value)) }
         fun update(next: Double) {
             value = next.coerceIn(minimum, maximum); input.setText(format(value)); changed(value)
         }
         input.setOnFocusChangeListener { _, focused -> if (!focused) update(input.text.toString().toDoubleOrNull() ?: value) }
-        return LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Button(activity).apply { text = "−"; setOnClickListener { update(value - step) } }, LinearLayout.LayoutParams(dp(54), dp(50)))
-            addView(input, LinearLayout.LayoutParams(0, dp(50), 1f))
-            addView(Button(activity).apply { text = "+"; setOnClickListener { update(value + step) } }, LinearLayout.LayoutParams(dp(54), dp(50)))
-        }
+        binding.decreaseButton.setOnClickListener { update(value - step) }
+        binding.increaseButton.setOnClickListener { update(value + step) }
+        return binding.root
     }
 
-    private fun slider(maximum: Int, initial: Int, changed: (Int) -> Unit) = SeekBar(activity).apply {
-        max = maximum; progress = initial.coerceIn(0, maximum)
-        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) { if (fromUser) changed(progress) }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-        })
-    }
+    private fun slider(maximum: Int, initial: Int, changed: (Int) -> Unit) =
+        ViewEpubSettingsSliderBinding.inflate(activity.layoutInflater).root.apply {
+            max = maximum; progress = initial.coerceIn(0, maximum)
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) changed(progress)
+                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+            })
+        }
 
     private fun spinner(options: Array<String>, selectedIndex: Int, selected: (Int) -> Unit) = LimitedHeightSpinner(activity).apply {
         adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, options.toList())
@@ -165,22 +155,32 @@ class EpubReadingSettingsPanel(
         }
     }
 
-    private fun header(title: String, actionText: String, action: () -> Unit) = LinearLayout(activity).apply {
-        gravity = Gravity.CENTER_VERTICAL
-        addView(TextView(activity).apply { text = title; textSize = 24f; typeface = android.graphics.Typeface.DEFAULT_BOLD }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        addView(Button(activity).apply { text = actionText; isAllCaps = false; setOnClickListener { action() } })
+    private fun actionButton(value: String, action: () -> Unit): View {
+        val binding = ViewActionButtonBinding.inflate(activity.layoutInflater)
+        binding.actionButton.text = value
+        binding.actionButton.setOnClickListener { action() }
+        return binding.root
     }
 
-    private fun label(value: String) = TextView(activity).apply {
-        text = value; textSize = 16f; setPadding(dp(2), dp(12), dp(2), dp(6))
+    private fun toggle(value: String, checked: Boolean, changed: (Boolean) -> Unit): View {
+        val binding = ViewEpubSettingsToggleBinding.inflate(activity.layoutInflater)
+        binding.toggleCheckbox.text = value
+        binding.toggleCheckbox.isChecked = checked
+        binding.toggleCheckbox.setOnCheckedChangeListener { _, isChecked -> changed(isChecked) }
+        return binding.root
     }
 
-    private fun family(title: String, build: LinearLayout.() -> Unit) = LinearLayout(activity).apply {
-        orientation = LinearLayout.VERTICAL; tag = ReaderMenuTags.CARD
-        setPadding(dp(14), dp(10), dp(14), dp(14)); setBackgroundResource(R.drawable.rounded_panel); elevation = dp(2).toFloat()
-        addView(TextView(activity).apply { text = title; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(4)) })
-        build()
-    }.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) } }
+    private fun label(value: String) =
+        ViewEpubSettingsLabelBinding.inflate(activity.layoutInflater).root.apply { text = value }
+
+    private fun family(title: String, build: LinearLayout.() -> Unit): View {
+        val binding = ItemEpubSettingsFamilyBinding.inflate(activity.layoutInflater, familyContainer, false)
+        binding.root.tag = ReaderMenuTags.CARD
+        binding.root.elevation = dp(2).toFloat()
+        binding.familyTitle.text = title
+        binding.familyContent.apply(build)
+        return binding.root
+    }
 
     private fun format(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()

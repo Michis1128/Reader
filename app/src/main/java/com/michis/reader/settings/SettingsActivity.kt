@@ -1,10 +1,19 @@
 package com.michis.reader.settings
 
 import com.michis.reader.R
+import com.michis.reader.databinding.ViewSettingsSectionBinding
+import com.michis.reader.databinding.ViewSettingsFieldBinding
+import com.michis.reader.databinding.ActivitySettingsBinding
+import com.michis.reader.databinding.ViewHexColorEditorBinding
+import com.michis.reader.databinding.ViewActionButtonBinding
+import com.michis.reader.databinding.ViewSettingsDescriptionBinding
+import com.michis.reader.databinding.ViewSettingsToggleBinding
+import com.michis.reader.databinding.ViewVerticalContainerBinding
 import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
+import com.michis.reader.ui.ScreenHeader
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -13,7 +22,6 @@ import android.os.Bundle
 import android.os.Build
 import android.text.InputFilter
 import android.text.InputType
-import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.widget.*
@@ -34,86 +42,79 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val screen = if (advancedSyncMode) buildAdvancedSyncScreen() else buildSettingsScreen()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; AppThemePalette.markBackground(this)
-            addView(fixedSettingsHeader(if (advancedSyncMode) "Drive avanzado" else "Configuración"))
-            addView(ScrollView(context).apply {
-                isFillViewport = true; clipToPadding = true; addView(screen)
-            }, LinearLayout.LayoutParams(-1, 0, 1f))
-        }
-        applyInsets(root)
-        setContentView(root)
+        val binding = ActivitySettingsBinding.inflate(layoutInflater)
+        AppThemePalette.markBackground(binding.rootContainer)
+        ScreenHeader.configure(
+            this,
+            binding.screenHeader,
+            if (advancedSyncMode) "Drive avanzado" else getString(R.string.settings_title)
+        ) { finish() }
+        binding.contentContainer.addView(screen, FrameLayout.LayoutParams(-1, -2))
+        applyInsets(binding.rootContainer)
+        setContentView(binding.root)
         AppThemePalette.apply(this)
     }
 
-    private fun fixedSettingsHeader(title: String) = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), dp(5), dp(20), dp(5))
-        elevation = dp(5).toFloat(); AppThemePalette.markSurface(this)
-        addView(Button(context).apply { text = "‹"; contentDescription = "Regresar"; textSize = 24f; setOnClickListener { finish() } })
-        addView(TextView(context).apply {
-            text = title; textSize = 28f; typeface = android.graphics.Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER_VERTICAL
-        }, LinearLayout.LayoutParams(0, dp(58), 1f))
-    }
-
-    private fun buildAdvancedSyncScreen() = LinearLayout(this).apply {
+    private fun buildAdvancedSyncScreen() = verticalContainer().apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
         addView(description("Estas opciones cambian la vinculación técnica de Drive. La sincronización cotidiana puede hacerse desde la biblioteca."))
-        addView(familyPanel { addView(googleAccountPanel()) })
+        addView(settingsSection(null) { addView(googleAccountPanel()) })
     }
 
-    private fun buildSettingsScreen() = LinearLayout(this).apply {
+    private fun buildSettingsScreen() = verticalContainer().apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
-        addView(familyTitle("Cuenta y sincronización")); addView(familyPanel {
+        addView(settingsSection("Cuenta y sincronización") {
             addView(googleAccountPanel())
         })
-        addView(familyTitle("Lectura y modos rápidos")); addView(familyPanel {
+        addView(settingsSection("Lectura y modos rápidos") {
             addView(description("Con los controles ocultos, toca la esquina superior izquierda para alternar únicamente entre estos dos temas."))
-            addView(fieldTitle("Tema global")); addView(globalThemeSpinner())
-            addView(fieldTitle("Modo rápido 1 (predeterminado: Día)")); addView(modeSpinner("quick_mode_1", "Día"))
-            addView(fieldTitle("Modo rápido 2 (predeterminado: Noche)")); addView(modeSpinner("quick_mode_2", "Noche"))
-            addView(fieldTitle("Tiempo de pantalla activa")); addView(screenTimeoutSpinner())
+            addView(settingsField("Tema global", globalThemeSpinner()))
+            addView(settingsField("Modo rápido 1 (predeterminado: Día)", modeSpinner("quick_mode_1", "Día")))
+            addView(settingsField("Modo rápido 2 (predeterminado: Noche)", modeSpinner("quick_mode_2", "Noche")))
+            addView(settingsField("Tiempo de pantalla activa", screenTimeoutSpinner()))
         })
-        addView(familyTitle("Apariencia de menús")); addView(familyPanel {
-            val customColorControls = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(fieldTitle("Color personalizado")); addView(hexColorEditor("menu_custom_color", "#FFF4E0"))
+        addView(settingsSection("Apariencia de menús") {
+            val customColorControls = verticalContainer().apply {
+                addView(settingsField("Color personalizado", hexColorEditor("menu_custom_color", "#FFF4E0")))
                 visibility = if (normalizedMenuColorMode() == "custom") View.VISIBLE else View.GONE
             }
-            addView(fieldTitle("Color de los menús")); addView(menuColorSpinner { mode ->
+            addView(settingsField("Color de los menús", menuColorSpinner { mode ->
                 customColorControls.visibility = if (mode == "custom") View.VISIBLE else View.GONE
                 AppThemePalette.apply(this@SettingsActivity)
-            })
+            }))
             addView(customColorControls)
         })
-        addView(familyTitle("Diccionarios")); addView(familyPanel {
-            addView(fieldTitle("Color de resaltado")); addView(hexColorEditor("dictionary_highlight_color", "#665A7D9A"))
+        addView(settingsSection("Diccionarios") {
+            addView(settingsField("Color de resaltado", hexColorEditor("dictionary_highlight_color", "#665A7D9A")))
         })
-        addView(familyTitle("Citas")); addView(familyPanel {
+        addView(settingsSection("Citas") {
             addView(description("Color predeterminado para las nuevas citas. Podrás cambiarlo al guardar o editar cada cita."))
-            addView(fieldTitle("Color predeterminado")); addView(hexColorEditor("quote_default_color", "#66FFD54F"))
+            addView(settingsField("Color predeterminado", hexColorEditor("quote_default_color", "#66FFD54F")))
         })
-        addView(familyTitle("Marcadores")); addView(familyPanel {
+        addView(settingsSection("Marcadores") {
             addView(description("Personaliza cómo se identifican los puntos guardados dentro de cada libro."))
-            addView(fieldTitle("Color de marcador")); addView(hexColorEditor("bookmark_color", "#FF8D6E63"))
-            addView(Switch(context).apply {
-                text = "Permitir marcador tocando la esquina"; isChecked = readerSettings.preferences.getBoolean("corner_bookmark_enabled", true)
+            addView(settingsField("Color de marcador", hexColorEditor("bookmark_color", "#FF8D6E63")))
+            addView(settingsToggle("Permitir marcador tocando la esquina") {
+                isChecked = readerSettings.preferences.getBoolean("corner_bookmark_enabled", true)
                 setOnCheckedChangeListener { _, checked -> readerSettings.preferences.edit().putBoolean("corner_bookmark_enabled", checked).apply() }
             })
         })
-        addView(familyTitle("Comandos aéreos del S Pen")); addView(familyPanel {
+        addView(settingsSection("Comandos aéreos del S Pen") {
             addView(description("Los gestos solo se reconocen mientras mantienes presionado el botón del S Pen."))
-            SpenControlPreferences.gestures.forEach { gesture -> addView(fieldTitle(gesture.label)); addView(spenActionSpinner(gesture)) }
-            addView(Button(context).apply {
-                text = "Restaurar comandos predeterminados"; isAllCaps = false
+            SpenControlPreferences.gestures.forEach { gesture ->
+                addView(settingsField(gesture.label, spenActionSpinner(gesture)))
+            }
+            addView(settingsAction("Restaurar comandos predeterminados") {
                 setOnClickListener { restoreDefaultSpenActions(); Toast.makeText(context, "Comandos restaurados", Toast.LENGTH_SHORT).show(); recreate() }
             })
-            val result = TextView(context).apply { text = "Diagnóstico todavía no ejecutado"; setPadding(dp(12), dp(10), dp(12), dp(10)) }
-            addView(Button(context).apply { text = "Comprobar compatibilidad del S Pen"; isAllCaps = false; setOnClickListener { diagnoseSpen(result) } })
+            val result = description("Diagnóstico todavía no ejecutado")
+            addView(settingsAction("Comprobar compatibilidad del S Pen") {
+                setOnClickListener { diagnoseSpen(result) }
+            })
             addView(result)
         })
-        addView(familyTitle("Almacenamiento y privacidad")); addView(familyPanel {
-            addView(Button(context).apply {
-                text = "Reiniciar libros…"; isAllCaps = false
+        addView(settingsSection("Almacenamiento y privacidad") {
+            addView(settingsAction("Reiniciar libros…") {
                 setOnClickListener { startActivity(Intent(this@SettingsActivity, ResetBooksActivity::class.java)) }
             })
             addView(description("Los libros EPUB permanecen en el dispositivo. La aplicación no envía archivos ni incluye telemetría."))
@@ -121,6 +122,8 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private fun googleAccountPanel(): View = driveSettingsSection.createPanel()
+
+    private fun verticalContainer() = ViewVerticalContainerBinding.inflate(layoutInflater).root
 
 
 
@@ -232,22 +235,18 @@ class SettingsActivity : ComponentActivity() {
 
     private fun hexColorEditor(preferenceKey: String, defaultColor: String): View {
         val preferences = readerSettings.preferences
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val binding = ViewHexColorEditorBinding.inflate(layoutInflater)
         val initialColor = parseColor(preferences.getString(preferenceKey, defaultColor))
-        val preview = View(this).apply {
+        val preview = binding.colorPreview.apply {
             if (preferenceKey == "menu_custom_color") setCustomMenuColorPreview(this, initialColor)
             else setBackgroundColor(initialColor)
         }
-        val input = EditText(this).apply {
-            hint = defaultColor.removePrefix("#"); setText(preferences.getString(preferenceKey, defaultColor)?.removePrefix("#"))
+        val input = binding.hexInput.apply {
+            hint = defaultColor.removePrefix("#")
+            setText(preferences.getString(preferenceKey, defaultColor)?.removePrefix("#"))
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setSingleLine()
             filters = arrayOf(InputFilter.LengthFilter(8), InputFilter { source, _, _, _, _, _ -> source.filter { it in "0123456789abcdefABCDEF" } })
         }
-        row.addView(TextView(this).apply { text = "#"; textSize = 20f })
-        row.addView(input, LinearLayout.LayoutParams(0, dp(50), 1f))
-        row.addView(preview, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginStart = dp(8) })
-        container.addView(row)
         var pendingColor = parseColor(preferences.getString(preferenceKey, defaultColor))
         var updating = false
         input.addTextChangedListener(object : android.text.TextWatcher {
@@ -276,7 +275,7 @@ class SettingsActivity : ComponentActivity() {
                 Toast.makeText(this, "Color aplicado", Toast.LENGTH_SHORT).show()
             }
         }
-        return container
+        return binding.root
     }
 
     private fun parseColor(value: String?) = runCatching { Color.parseColor(value) }.getOrDefault(0x665A7D9A)
@@ -293,21 +292,41 @@ class SettingsActivity : ComponentActivity() {
         preview.elevation = dp(1).toFloat()
     }
 
-    private fun familyTitle(value: String) = TextView(this).apply {
-        text = value; textSize = 19f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setPadding(dp(3), dp(16), dp(3), dp(6))
+    private fun settingsSection(title: String?, build: LinearLayout.() -> Unit): View {
+        val binding = ViewSettingsSectionBinding.inflate(layoutInflater)
+        binding.sectionTitle.apply {
+            text = title.orEmpty()
+            visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
+        }
+        binding.contentContainer.apply(build)
+        binding.contentContainer.elevation = dp(2).toFloat()
+        AppThemePalette.markCard(binding.contentContainer)
+        return binding.root
     }
-    private fun familyPanel(build: LinearLayout.() -> Unit) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), dp(12))
-        setBackgroundResource(R.drawable.rounded_panel); elevation = dp(2).toFloat(); build()
+
+    private fun settingsField(label: String, control: View): View {
+        val binding = ViewSettingsFieldBinding.inflate(layoutInflater)
+        binding.fieldLabel.text = label
+        binding.controlContainer.addView(control, FrameLayout.LayoutParams(-1, -2))
+        return binding.root
     }
-    private fun fieldTitle(value: String) = TextView(this).apply {
-        text = value; textSize = 15f; typeface = android.graphics.Typeface.DEFAULT_BOLD
-        setPadding(dp(2), dp(9), dp(2), dp(4))
+    private fun settingsAction(value: String, configure: Button.() -> Unit): View {
+        val binding = ViewActionButtonBinding.inflate(layoutInflater)
+        binding.actionButton.text = value
+        binding.actionButton.configure()
+        return binding.root
     }
-    private fun description(value: String) = TextView(this).apply {
-        text = value; setTextColor(Color.DKGRAY); setPadding(dp(2), dp(4), dp(2), dp(7))
+
+    private fun settingsToggle(value: String, configure: Switch.() -> Unit): View {
+        val binding = ViewSettingsToggleBinding.inflate(layoutInflater)
+        binding.toggleSwitch.text = value
+        binding.toggleSwitch.configure()
+        return binding.root
     }
+
+    private fun description(value: String) =
+        ViewSettingsDescriptionBinding.inflate(layoutInflater).root.apply { text = value }
+
     private fun applyInsets(view: View) {
         val originalLeft = view.paddingLeft; val originalTop = view.paddingTop
         val originalRight = view.paddingRight; val originalBottom = view.paddingBottom

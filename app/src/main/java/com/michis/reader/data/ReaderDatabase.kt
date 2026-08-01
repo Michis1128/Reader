@@ -232,6 +232,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun deleteAnnotation(identifier: Long) = synchronization.deleteEntity("annotations", "annotation", identifier)
     fun updateAnnotationColor(identifier: Long, color: Int) = annotationsRepository.updateAnnotationColor(identifier, color)
+    fun updateQuote(identifier: Long, note: String, color: Int) = annotationsRepository.updateQuote(identifier, note, color)
 
     fun bookmarkAt(documentIdentifier: Long, location: Int) = annotationsRepository.bookmarkAt(documentIdentifier, location)
 
@@ -276,6 +277,13 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
         dictionaries.updateDescription(identifier, description)
 
     fun deleteDictionaryEntry(identifier: Long) = synchronization.deleteEntity("dictionary_entries", "dictionary_entry", identifier)
+
+    fun deleteDictionaryCategory(identifier: Long) {
+        dictionaries.entries(identifier).forEach { entry ->
+            synchronization.deleteEntity("dictionary_entries", "dictionary_entry", entry.identifier)
+        }
+        synchronization.deleteEntity("dictionary_categories", "dictionary_category", identifier)
+    }
 
     fun documentsWithDictionaries() = dictionaries.documentsWithDictionaries()
 

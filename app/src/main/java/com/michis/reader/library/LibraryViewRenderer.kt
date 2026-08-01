@@ -2,7 +2,14 @@ package com.michis.reader.library
 
 import com.michis.reader.R
 import com.michis.reader.data.*
+import com.michis.reader.databinding.ItemLibraryCoverLargeBinding
+import com.michis.reader.databinding.ItemLibraryCoverSmallBinding
+import com.michis.reader.databinding.ItemLibraryDocumentCompactBinding
+import com.michis.reader.databinding.ItemLibraryDocumentDetailedBinding
+import com.michis.reader.databinding.ItemLibraryFolderBinding
+import com.michis.reader.databinding.ViewLibraryGridRowBinding
 import com.michis.reader.reader.EpubPageEstimator
+import com.michis.reader.theme.AppThemePalette
 
 import android.app.Activity
 import android.content.ClipData
@@ -10,9 +17,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.DragEvent
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -47,9 +52,8 @@ internal class LibraryViewRenderer(
         val cellWidth = (activity.resources.displayMetrics.widthPixels - dp(40)) / columns
         val cardHeight = (cellWidth * 1.48f).toInt()
         entries.chunked(columns).forEach { rowItems ->
-            documentList.addView(horizontalLayout {
-                clipChildren = false
-                clipToPadding = false
+            val rowBinding = ViewLibraryGridRowBinding.inflate(activity.layoutInflater, documentList, false)
+            documentList.addView(rowBinding.root.apply {
                 rowItems.forEach { entry ->
                     val card = when (entry) {
                         GridEntry.Parent -> parentGridCard()
@@ -77,91 +81,103 @@ internal class LibraryViewRenderer(
         }
     }
 
-    private fun parentGridCard(): View = verticalLayout {
-        gravity = Gravity.CENTER
-        setPadding(dp(5), dp(7), dp(5), dp(7))
-        setBackgroundResource(R.drawable.rounded_panel)
-        addView(TextView(context).apply { text = "…"; textSize = if (displayMode == 0) 54f else 38f; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, 0, 1f))
-        addView(TextView(context).apply { text = "Carpeta anterior"; textSize = if (displayMode == 0) 12f else 10f; maxLines = 2; gravity = Gravity.CENTER })
-        contentDescription = "Regresar a la carpeta anterior"
-        setOnClickListener { navigateToParent() }
+    private fun parentGridCard(): View {
+        val card = inflateGridCard()
+        card.coverImage.visibility = View.GONE
+        card.folderIcon.apply { visibility = View.VISIBLE; text = "…" }
+        card.title.text = "Carpeta anterior"
+        card.root.contentDescription = "Regresar a la carpeta anterior"
+        card.root.setOnClickListener { navigateToParent() }
+        AppThemePalette.markCard(card.root)
+        return card.root
     }
 
-    private fun gridCard(item: LibraryItem): View = verticalLayout {
-        gravity = Gravity.CENTER
-        setPadding(dp(5), dp(7), dp(5), dp(7))
-        setBackgroundResource(R.drawable.rounded_panel)
+    private fun gridCard(item: LibraryItem): View {
+        val card = inflateGridCard()
         when (item) {
             is LibraryItem.Folder -> {
-                addView(TextView(context).apply {
-                    text = "📁"; textSize = if (displayMode == 0) 54f else 38f; gravity = Gravity.CENTER
-                    setTextColor(Color.rgb(92, 73, 122))
-                }, LinearLayout.LayoutParams(-1, 0, 1f))
-                addView(cardTitle(item.value.name))
-                setOnClickListener { openFolder(item.value) }
+                card.coverImage.visibility = View.GONE
+                card.folderIcon.apply { visibility = View.VISIBLE; text = "📚" }
+                card.title.text = item.value.name
+                card.root.setOnClickListener { openFolder(item.value) }
             }
             is LibraryItem.Document -> {
-                addView(ImageView(context).apply {
+                card.folderIcon.visibility = View.GONE
+                card.coverImage.apply {
+                    visibility = View.VISIBLE
                     scaleType = ImageView.ScaleType.CENTER_CROP
                     setImageDrawable(ColorDrawable(Color.rgb(224, 218, 205)))
                     contentDescription = "Portada de ${item.value.title}"
                     BookCoverLoader.load(activity, item.value, this)
-                }, LinearLayout.LayoutParams(-1, 0, 1f))
-                addView(cardTitle(item.value.title))
-                setOnClickListener { openDocument(item.value.identifier) }
+                }
+                card.title.text = item.value.title
+                card.root.setOnClickListener { openDocument(item.value.identifier) }
             }
         }
-        configureDragging(this, item)
+        AppThemePalette.markCard(card.root)
+        configureDragging(card.root, item)
+        return card.root
     }
 
-    private fun cardTitle(value: String) = TextView(activity).apply {
-        text = value; textSize = if (displayMode == 0) 12f else 10f; maxLines = 2; gravity = Gravity.CENTER
+    private fun inflateGridCard(): GridCardViews = if (displayMode == 0) {
+        val binding = ItemLibraryCoverLargeBinding.inflate(activity.layoutInflater, documentList, false)
+        GridCardViews(binding.root, binding.coverImage, binding.folderIcon, binding.itemTitle)
+    } else {
+        val binding = ItemLibraryCoverSmallBinding.inflate(activity.layoutInflater, documentList, false)
+        GridCardViews(binding.root, binding.coverImage, binding.folderIcon, binding.itemTitle)
     }
 
-    private fun parentFolderCard(compact: Boolean): View = horizontalLayout {
-        setBackgroundResource(R.drawable.rounded_panel)
-        setPadding(dp(16), if (compact) dp(10) else dp(15), dp(16), if (compact) dp(10) else dp(15))
-        addView(TextView(context).apply { text = "…"; textSize = if (compact) 24f else 32f })
-        addView(TextView(context).apply {
-            text = "Carpeta anterior"; textSize = if (compact) 17f else 19f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(dp(12), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(TextView(context).apply { text = "‹"; textSize = 28f })
-        setOnClickListener { navigateToParent() }
-    }.withListMargins()
+    private fun parentFolderCard(compact: Boolean): View {
+        val binding = folderBinding(compact)
+        binding.folderIcon.text = "…"
+        binding.folderName.text = "Carpeta anterior"
+        binding.navigationArrow.text = "‹"
+        binding.root.contentDescription = "Regresar a la carpeta anterior"
+        binding.root.setOnClickListener { navigateToParent() }
+        return binding.root
+    }
 
-    private fun folderCard(folder: LibraryFolder, compact: Boolean): View = horizontalLayout {
-        setBackgroundResource(R.drawable.rounded_panel)
-        setPadding(dp(16), if (compact) dp(10) else dp(15), dp(16), if (compact) dp(10) else dp(15))
-        addView(TextView(context).apply { text = "📁"; textSize = if (compact) 24f else 32f })
-        addView(TextView(context).apply {
-            text = folder.name; textSize = if (compact) 17f else 19f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(dp(12), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(TextView(context).apply { text = "›"; textSize = 28f; setTextColor(Color.rgb(92, 73, 122)) })
-        setOnClickListener { openFolder(folder) }
-    }.withListMargins()
+    private fun folderCard(folder: LibraryFolder, compact: Boolean): View {
+        val binding = folderBinding(compact)
+        binding.folderIcon.text = "📚"
+        binding.folderName.text = folder.name
+        binding.navigationArrow.text = "›"
+        binding.root.setOnClickListener { openFolder(folder) }
+        return binding.root
+    }
 
-    private fun detailedDocumentCard(document: LibraryDocument): View = verticalLayout {
-        setBackgroundResource(R.drawable.rounded_panel); setPadding(dp(18), dp(14), dp(18), dp(14))
+    private fun folderBinding(compact: Boolean): ItemLibraryFolderBinding {
+        val binding = ItemLibraryFolderBinding.inflate(activity.layoutInflater, documentList, false)
+        val verticalPadding = dp(if (compact) 10 else 15)
+        binding.root.setPadding(dp(16), verticalPadding, dp(16), verticalPadding)
+        binding.folderIcon.textSize = if (compact) 24f else 32f
+        binding.folderName.textSize = if (compact) 17f else 19f
+        AppThemePalette.markCard(binding.root)
+        return binding
+    }
+
+    private fun detailedDocumentCard(document: LibraryDocument): View {
+        val binding = ItemLibraryDocumentDetailedBinding.inflate(activity.layoutInflater, documentList, false)
         val quoteCount = database.annotations(document.identifier).count { it.kind == "cita" }
-        addView(TextView(context).apply { text = document.title; textSize = 18f; typeface = android.graphics.Typeface.DEFAULT_BOLD })
-        addView(TextView(context).apply {
-            val dictionaryStatus = if (database.effectiveDictionaryEntries(document.identifier).isEmpty()) "Sin diccionario" else "Diccionario activo"
-            text = "${document.format} · Calculando páginas… · $quoteCount citas · $dictionaryStatus"
-            setTextColor(Color.DKGRAY)
-            EpubPageEstimator.estimate(activity, document) { pages ->
-                text = "${document.format} · $pages páginas aprox. · $quoteCount citas · $dictionaryStatus"
-            }
-        })
-        setOnClickListener { openDocument(document.identifier) }
-    }.withListMargins()
+        val dictionaryStatus = if (database.effectiveDictionaryEntries(document.identifier).isEmpty()) "Sin diccionario" else "Diccionario activo"
+        binding.documentTitle.text = document.title
+        binding.documentDetails.text = "${document.format} · Calculando páginas… · $quoteCount citas · $dictionaryStatus"
+        EpubPageEstimator.estimate(activity, document) { pages ->
+            binding.documentDetails.text = "${document.format} · $pages páginas aprox. · $quoteCount citas · $dictionaryStatus"
+        }
+        binding.root.setOnClickListener { openDocument(document.identifier) }
+        AppThemePalette.markCard(binding.root)
+        return binding.root
+    }
 
-    private fun documentCard(document: LibraryDocument): View = verticalLayout {
-        setBackgroundResource(R.drawable.rounded_panel); setPadding(dp(18), dp(16), dp(18), dp(14))
-        addView(TextView(context).apply { text = document.title; textSize = 19f; typeface = android.graphics.Typeface.DEFAULT_BOLD })
-        addView(TextView(context).apply { text = document.format; textSize = 13f; setTextColor(Color.GRAY); setPadding(0, dp(4), 0, dp(8)) })
-        setOnClickListener { openDocument(document.identifier) }
-    }.withListMargins(bottom = 10)
+    private fun documentCard(document: LibraryDocument): View {
+        val binding = ItemLibraryDocumentCompactBinding.inflate(activity.layoutInflater, documentList, false)
+        binding.documentTitle.text = document.title
+        binding.documentFormat.text = document.format
+        binding.root.setOnClickListener { openDocument(document.identifier) }
+        AppThemePalette.markCard(binding.root)
+        return binding.root
+    }
 
     private fun configureDragging(view: View, item: LibraryItem) {
         view.setOnLongClickListener {
@@ -190,15 +206,14 @@ internal class LibraryViewRenderer(
         }
     }
 
-    private fun <T : View> T.withListMargins(bottom: Int = 9): T = apply {
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(4); bottomMargin = dp(bottom)
-        }
-    }
-
-    private fun verticalLayout(block: LinearLayout.() -> Unit) = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL; block() }
-    private fun horizontalLayout(block: LinearLayout.() -> Unit) = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; block() }
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+
+    private data class GridCardViews(
+        val root: LinearLayout,
+        val coverImage: ImageView,
+        val folderIcon: TextView,
+        val title: TextView
+    )
 
     private sealed interface GridEntry {
         data object Parent : GridEntry

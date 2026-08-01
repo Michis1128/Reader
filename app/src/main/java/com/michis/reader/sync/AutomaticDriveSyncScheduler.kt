@@ -54,6 +54,20 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
         )
     }
 
+    fun enqueueBookSync(documentIdentifier: Long) {
+        if (documentIdentifier < 0) return
+        val request = OneTimeWorkRequestBuilder<GoogleDriveSyncWorker>()
+            .setConstraints(networkConstraints())
+            .setInputData(workDataOf(
+                GoogleDriveSyncWorker.KEY_MANUAL_EXECUTION to true,
+                GoogleDriveSyncWorker.KEY_DOCUMENT_IDENTIFIER to documentIdentifier
+            ))
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            BOOK_WORK_NAME, ExistingWorkPolicy.REPLACE, request
+        )
+    }
+
     private fun networkConstraints() = Constraints.Builder()
         .setRequiredNetworkType(if (wifiOnly()) NetworkType.UNMETERED else NetworkType.CONNECTED)
         .build()
@@ -74,5 +88,6 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
         private const val DEFAULT_INTERVAL_MINUTES = 60L
         private const val UNIQUE_WORK_NAME = "michis_reader_periodic_drive_sync"
         private const val IMMEDIATE_WORK_NAME = "michis_reader_immediate_drive_sync"
+        private const val BOOK_WORK_NAME = "michis_reader_last_book_sync"
     }
 }

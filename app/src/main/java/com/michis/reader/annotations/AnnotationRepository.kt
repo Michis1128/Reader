@@ -64,6 +64,17 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         arrayOf(identifier.toString())
     )
 
+    fun updateQuote(identifier: Long, note: String, color: Int): Int = database.writableDatabase.update(
+        "annotations",
+        ContentValues().apply {
+            put("note", note)
+            put("color", color)
+            put("updated_at", System.currentTimeMillis())
+        },
+        "identifier = ? AND kind = 'cita'",
+        arrayOf(identifier.toString())
+    )
+
     fun bookmarkAt(documentIdentifier: Long, location: Int): SavedAnnotation? =
         annotations(documentIdentifier).firstOrNull { it.kind == "marcador" && it.location == location }
 

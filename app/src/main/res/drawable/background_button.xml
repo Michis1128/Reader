@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:alpha="0.45">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/ui_accent_fallback" />
+            <corners android:radius="@dimen/ui_corner_radius_control" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/ui_accent_fallback" />
+            <corners android:radius="@dimen/ui_corner_radius_control" />
+        </shape>
+    </item>
+</selector>

@@ -32,10 +32,18 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
             }
             val accessToken = authorizationResult.accessToken
                 ?: return@withContext statusSuccess(scheduler, "Pendiente: Google no entregó un token temporal")
-            val syncResult = GoogleDriveSyncCoordinator(applicationContext).synchronize(
-                accessToken, session.accountIdentifier, folder, repository
-            )
-            scheduler.saveStatus("Correcta: ${syncResult.documentCount} libros sincronizados")
+            val documentIdentifier = inputData.getLong(KEY_DOCUMENT_IDENTIFIER, -1L)
+            if (documentIdentifier >= 0) {
+                IncrementalLibrarySyncCoordinator(applicationContext).synchronizeBook(
+                    accessToken, session.accountIdentifier, folder, repository, documentIdentifier
+                )
+                scheduler.saveStatus("Correcta: último libro sincronizado")
+            } else {
+                val syncResult = GoogleDriveSyncCoordinator(applicationContext).synchronize(
+                    accessToken, session.accountIdentifier, folder, repository
+                )
+                scheduler.saveStatus("Correcta: ${syncResult.documentCount} libros sincronizados")
+            }
             Result.success()
         } catch (error: Exception) {
             scheduler.saveStatus("Error temporal: ${error.message.orEmpty()}")
@@ -54,5 +62,8 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
             addOnFailureListener { if (continuation.isActive) continuation.resumeWithException(it) }
         }
 
-    companion object { const val KEY_MANUAL_EXECUTION = "manual_execution" }
+    companion object {
+        const val KEY_MANUAL_EXECUTION = "manual_execution"
+        const val KEY_DOCUMENT_IDENTIFIER = "document_identifier"
+    }
 }

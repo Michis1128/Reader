@@ -20,9 +20,10 @@ class EpubDecorationController(
     private val database: ReaderDatabase,
     private val documentIdentifier: Long,
     private val settings: ReaderSettingsRepository,
-    private val openDictionaryEntry: (Long) -> Unit
+    private val openDictionaryEntry: (Long) -> Unit,
+    private val editQuote: (Long) -> Unit
 ) {
-    var lastDictionaryActivationAt: Long = 0L
+    var lastDecorationActivationAt: Long = 0L
         private set
 
     private var publication: Publication? = null
@@ -30,7 +31,7 @@ class EpubDecorationController(
 
     private val dictionaryListener = object : DecorableNavigator.Listener {
         override fun onDecorationActivated(event: DecorableNavigator.OnActivatedEvent): Boolean {
-            lastDictionaryActivationAt = SystemClock.uptimeMillis()
+            lastDecorationActivationAt = SystemClock.uptimeMillis()
             val identifier = event.decoration.extras[ENTRY_IDENTIFIER_EXTRA]?.toString()?.toLongOrNull() ?: return false
             val entry = database.findDictionaryEntry(identifier)
                 ?.takeIf { it.documentIdentifier in database.effectiveDictionaryOwnerIdentifiers(documentIdentifier) }
@@ -40,10 +41,23 @@ class EpubDecorationController(
         }
     }
 
+    private val quoteListener = object : DecorableNavigator.Listener {
+        override fun onDecorationActivated(event: DecorableNavigator.OnActivatedEvent): Boolean {
+            lastDecorationActivationAt = SystemClock.uptimeMillis()
+            val identifier = event.decoration.extras[QUOTE_IDENTIFIER_EXTRA]?.toString()?.toLongOrNull() ?: return false
+            val quoteExists = database.annotations(documentIdentifier)
+                .any { it.identifier == identifier && it.kind == "cita" }
+            if (!quoteExists) return false
+            editQuote(identifier)
+            return true
+        }
+    }
+
     fun attach(publication: Publication, navigator: EpubNavigatorFragment) {
         this.publication = publication
         this.navigator = navigator
         navigator.addDecorationListener(DICTIONARY_GROUP, dictionaryListener)
+        navigator.addDecorationListener(QUOTE_GROUP, quoteListener)
     }
 
     fun dictionaryButtonLabel(): String = if (
@@ -103,7 +117,8 @@ class EpubDecorationController(
                 if (locator != null) decorations += Decoration(
                     id = "quote-${quote.identifier}",
                     locator = locator,
-                    style = Decoration.Style.Highlight(quote.color, false)
+                    style = Decoration.Style.Highlight(quote.color, false),
+                    extras = mapOf(QUOTE_IDENTIFIER_EXTRA to quote.identifier)
                 )
             }
         targetNavigator.applyDecorations(decorations, QUOTE_GROUP)
@@ -113,5 +128,6 @@ class EpubDecorationController(
         const val DICTIONARY_GROUP = "book_dictionary"
         const val QUOTE_GROUP = "book_quotes"
         const val ENTRY_IDENTIFIER_EXTRA = "dictionary_entry_identifier"
+        const val QUOTE_IDENTIFIER_EXTRA = "quote_identifier"
     }
 }

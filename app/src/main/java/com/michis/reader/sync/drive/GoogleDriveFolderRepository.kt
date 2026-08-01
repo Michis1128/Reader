@@ -93,6 +93,20 @@ class GoogleDriveFolderRepository(private val context: Context) {
         if (error.message?.contains("No existe library-state.json") == true) null else throw error
     }
 
+    fun downloadNamedJsonOrNull(accessToken: String, folderIdentifier: String, fileName: String): ByteArray? {
+        val identifier = findNamedFile(accessToken, folderIdentifier, fileName) ?: return null
+        return downloadFile(accessToken, identifier)
+    }
+
+    fun uploadNamedJson(accessToken: String, folderIdentifier: String, fileName: String, bytes: ByteArray): String {
+        val existing = findNamedFile(accessToken, folderIdentifier, fileName)
+        if (existing != null) {
+            updateManifest(accessToken, existing, bytes)
+            return existing
+        }
+        return createJsonFile(accessToken, folderIdentifier, fileName, "michisReaderIncrementalState", bytes)
+    }
+
     private fun validateFolder(accessToken: String, identifier: String): Boolean {
         val url = "$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,trashed"
         return runCatching {
