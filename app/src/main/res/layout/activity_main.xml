@@ -87,10 +87,11 @@
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:fillViewport="true"
         android:scrollbars="none">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal"
@@ -133,15 +134,20 @@
                 android:textSize="12sp" />
 
             <Button
-                android:id="@+id/libraryDisplayButton"
+                android:id="@+id/libraryFilterButton"
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/ui_content_spacing_small"
                 android:textSize="12sp" />
 
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
             <Button
-                android:id="@+id/libraryFilterButton"
+                android:id="@+id/libraryDisplayButton"
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

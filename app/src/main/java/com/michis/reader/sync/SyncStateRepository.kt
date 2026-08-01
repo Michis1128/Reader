@@ -211,6 +211,7 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
     private fun deletionTarget(tombstone: SyncTombstone): SyncDeletionTarget? {
         val specification = when (tombstone.entityType) {
             "annotation" -> Triple("annotations", "updated_at", "kind || ': ' || CASE WHEN selected_text = '' THEN 'página ' || page_number ELSE selected_text END")
+            "dictionary_category" -> Triple("dictionary_categories", "updated_at", "'Subcategoría: ' || name")
             "dictionary_entry" -> Triple("dictionary_entries", "updated_at", "'Diccionario: ' || term")
             "dictionary_link" -> Triple("dictionary_document_links", "updated_at", "'Vínculo de diccionario compartido'")
             else -> return null

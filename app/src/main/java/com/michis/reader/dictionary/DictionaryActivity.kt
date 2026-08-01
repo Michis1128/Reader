@@ -105,6 +105,15 @@ class DictionaryActivity : ComponentActivity() {
         selectedCategory = category; content.removeAllViews(); titleView.text = category.name
         val entries = database.dictionaryEntries(category.identifier)
         content.addView(actionButton("Agregar palabra o frase") { showEntryEditor(category, null) })
+        content.addView(actionButton("Eliminar esta subcategoría") {
+            confirmDeletion(
+                "Eliminar subcategoría",
+                "Se eliminará ${category.name} y todos sus elementos."
+            ) {
+                database.deleteDictionaryCategory(category.identifier)
+                showCategories()
+            }
+        })
         if (entries.isNotEmpty()) {
             content.addView(actionButton("Seleccionar elementos para eliminar") {
                 showEntrySelection(category, entries)

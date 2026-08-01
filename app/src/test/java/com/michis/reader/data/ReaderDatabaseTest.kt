@@ -52,11 +52,13 @@ class ReaderDatabaseTest {
         assertNotNull(database.findDocument(documentIdentifier))
         assertEquals(0, database.readerLocation(documentIdentifier))
         val restoredDocument = requireNotNull(database.findDocument(documentIdentifier))
+        assertEquals(0, restoredDocument.lastOpenedAt)
         assertEquals(0f, restoredDocument.progress, 0f)
         assertTrue(database.annotations(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
         assertTrue(database.linkedDocuments(documentIdentifier).isEmpty())
+        assertTrue(database.documentsWithDictionaries().none { it.identifier == documentIdentifier })
         assertTrue(database.syncTombstones().isNotEmpty())
     }
 
@@ -88,7 +90,29 @@ class ReaderDatabaseTest {
 
         assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
+        assertTrue(database.documentsWithDictionaries().none { it.identifier == documentIdentifier })
         assertTrue(database.syncTombstones().count { it.entityType in setOf("dictionary_category", "dictionary_entry") } >= 2)
+    }
+
+    @Test
+    fun remoteDictionaryCategoryDeletionCanLeaveDocumentWithoutSubcategories() {
+        val documentIdentifier = database.saveDocument("content://books/remote-delete-category.epub", "remote-delete-category.epub")
+        val categoryIdentifier = database.createDictionaryCategory(documentIdentifier, "Lugares")
+        database.saveDictionaryEntry(documentIdentifier, categoryIdentifier, "Ávalon", "Isla", "")
+        val categorySync = database.dictionaryCategorySyncMetadata(categoryIdentifier)
+        val documentSync = database.documentSyncMetadata(documentIdentifier)
+
+        val result = database.applySyncDeletions(listOf(SyncTombstone(
+            entityType = "dictionary_category",
+            syncIdentifier = categorySync.syncIdentifier,
+            documentSyncIdentifier = documentSync.syncIdentifier,
+            deletedAt = categorySync.updatedAt
+        )))
+
+        assertEquals(1, result.appliedDeletions)
+        assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
+        assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
+        assertTrue(database.documentsWithDictionaries().none { it.identifier == documentIdentifier })
     }
 
     @Test

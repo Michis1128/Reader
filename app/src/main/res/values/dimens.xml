@@ -2,9 +2,9 @@
 <resources>
     <dimen name="ui_screen_padding_horizontal">14dp</dimen>
     <dimen name="ui_screen_padding_vertical">10dp</dimen>
-    <dimen name="ui_content_spacing_small">6dp</dimen>
-    <dimen name="ui_content_spacing">10dp</dimen>
-    <dimen name="ui_content_spacing_large">16dp</dimen>
+    <dimen name="ui_content_spacing_small">8dp</dimen>
+    <dimen name="ui_content_spacing">12dp</dimen>
+    <dimen name="ui_content_spacing_large">20dp</dimen>
     <dimen name="ui_card_padding_horizontal">16dp</dimen>
     <dimen name="ui_card_padding_vertical">14dp</dimen>
     <dimen name="ui_corner_radius_card">18dp</dimen>

@@ -23,6 +23,11 @@ class LimitedHeightSpinner @JvmOverloads constructor(
 ) : Spinner(context, attributes, defaultStyleAttribute, MODE_DROPDOWN) {
     private var optionsPopup: PopupWindow? = null
 
+    init {
+        isLongClickable = false
+        setOnLongClickListener { true }
+    }
+
     override fun performClick(): Boolean {
         val currentAdapter = adapter ?: return false
         if (currentAdapter.count == 0) return false
@@ -60,6 +65,8 @@ class LimitedHeightSpinner @JvmOverloads constructor(
         optionsPopup?.dismiss()
         super.onDetachedFromWindow()
     }
+
+    override fun performLongClick(): Boolean = true
 
     private inner class PopupOptionsAdapter(
         private val source: SpinnerAdapter,

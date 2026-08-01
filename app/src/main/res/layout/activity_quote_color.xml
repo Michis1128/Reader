@@ -76,7 +76,17 @@
                     style="@style/Widget.MichisReader.Button"
                     android:layout_width="match_parent"
                     android:layout_height="54dp"
+                    android:layout_marginTop="@dimen/ui_content_spacing"
                     android:text="Aplicar color y guardar cita" />
+
+                <Button
+                    android:id="@+id/deleteQuoteButton"
+                    style="@style/Widget.MichisReader.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:layout_marginTop="@dimen/ui_content_spacing"
+                    android:text="@string/action_delete"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
