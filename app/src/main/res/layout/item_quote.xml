@@ -12,13 +12,6 @@
     android:paddingEnd="@dimen/ui_card_padding_horizontal"
     android:paddingBottom="@dimen/ui_content_spacing">
 
-    <CheckBox
-        android:id="@+id/selectionCheckbox"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Seleccionar cita"
-        android:visibility="gone" />
-
     <TextView
         android:id="@+id/quoteText"
         android:layout_width="match_parent"
@@ -56,13 +49,5 @@
             android:layout_weight="1"
             android:text="Editar" />
 
-        <Button
-            android:id="@+id/deleteButton"
-            style="@style/Widget.MichisReader.Button"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/ui_content_spacing_small"
-            android:layout_weight="1"
-            android:text="@string/action_delete" />
     </LinearLayout>
 </LinearLayout>

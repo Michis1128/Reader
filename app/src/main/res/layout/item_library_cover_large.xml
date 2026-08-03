@@ -5,7 +5,7 @@
     android:background="@drawable/background_card"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="6dp">
+    android:padding="2dp">
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -23,7 +23,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:gravity="center"
-            android:textSize="54sp" />
+            android:textSize="68sp" />
     </FrameLayout>
 
     <TextView

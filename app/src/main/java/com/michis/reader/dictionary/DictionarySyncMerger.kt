@@ -31,6 +31,8 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
                     val remoteCategorySyncId = remoteCategory.optString("syncId")
                     val categoryName = remoteCategory.optString("name").trim()
                     if (remoteCategorySyncId.isBlank() || categoryName.isBlank()) continue
+                    val remoteCategoryUpdatedAt = remoteCategory.optLong("updatedAt", 0)
+                    if (hasNewerOrEqualTombstone("dictionary_category", remoteCategorySyncId, remoteCategoryUpdatedAt)) continue
                     val categoryBySync = categoryRowBySyncId(remoteCategorySyncId)
                     val categoryByName = categoryRowByName(localDocumentIdentifier, categoryName)
                     val localCategoryIdentifier = when {
@@ -46,7 +48,6 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
                             inserted
                         }
                     }
-                    val remoteCategoryUpdatedAt = remoteCategory.optLong("updatedAt", 0)
                     if (categoryBySync != null && remoteCategoryUpdatedAt > categoryBySync.second &&
                         (categoryByName == null || categoryByName.first == categoryBySync.first)) {
                         writableDatabase.update("dictionary_categories", ContentValues().apply {
@@ -61,6 +62,7 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
                         val term = remoteEntry.optString("term").trim()
                         if (remoteSyncId.isBlank() || term.isBlank()) continue
                         val remoteUpdatedAt = remoteEntry.optLong("updatedAt", 0)
+                        if (hasNewerOrEqualTombstone("dictionary_entry", remoteSyncId, remoteUpdatedAt)) continue
                         val bySync = dictionaryEntryRowBySyncId(remoteSyncId)
                         val byTerm = dictionaryEntryRowByTerm(localDocumentIdentifier, term)
                         if (bySync != null && byTerm != null && bySync.first != byTerm.first) {
@@ -96,6 +98,10 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
                 val remoteLinks = remoteDocument.optJSONArray("dictionaryLinks")
                 if (remoteLinks != null) for (linkIndex in 0 until remoteLinks.length()) {
                     val remoteLink = remoteLinks.optJSONObject(linkIndex) ?: continue
+                    val remoteLinkSyncId = remoteLink.optString("syncId")
+                    val remoteLinkUpdatedAt = remoteLink.optLong("updatedAt", 0)
+                    if (remoteLinkSyncId.isNotBlank() &&
+                        hasNewerOrEqualTombstone("dictionary_link", remoteLinkSyncId, remoteLinkUpdatedAt)) continue
                     val linkedIdentifier = localDocumentIdentifiersByKey[remoteLink.optString("linkedDocumentKey")] ?: continue
                     if (linkedIdentifier == localDocumentIdentifier) continue
                     val exists = readableDatabase.rawQuery(
@@ -105,8 +111,8 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
                     if (!exists) {
                         writableDatabase.insertOrThrow("dictionary_document_links", null, ContentValues().apply {
                             put("owner_document_identifier", localDocumentIdentifier); put("linked_document_identifier", linkedIdentifier)
-                            put("sync_id", remoteLink.optString("syncId", UUID.randomUUID().toString()))
-                            put("updated_at", remoteLink.optLong("updatedAt", 0))
+                            put("sync_id", remoteLinkSyncId.ifBlank { UUID.randomUUID().toString() })
+                            put("updated_at", remoteLinkUpdatedAt)
                         })
                         insertedLinks++
                     }
@@ -120,6 +126,12 @@ internal class DictionarySyncMerger(private val database: SQLiteOpenHelper) {
     private fun categoryRowBySyncId(syncIdentifier: String): Pair<Long, Long>? = readableDatabase.rawQuery(
         "SELECT identifier, updated_at FROM dictionary_categories WHERE sync_id = ?", arrayOf(syncIdentifier)
     ).use { if (it.moveToFirst()) it.getLong(0) to it.getLong(1) else null }
+
+    private fun hasNewerOrEqualTombstone(entityType: String, syncIdentifier: String, updatedAt: Long): Boolean =
+        readableDatabase.rawQuery(
+            "SELECT deleted_at FROM sync_tombstones WHERE entity_type = ? AND sync_id = ?",
+            arrayOf(entityType, syncIdentifier)
+        ).use { cursor -> cursor.moveToFirst() && cursor.getLong(0) >= updatedAt }
 
     private fun categoryRowByName(documentIdentifier: Long, name: String): Pair<Long, Long>? = readableDatabase.rawQuery(
         "SELECT identifier, updated_at FROM dictionary_categories WHERE document_identifier = ? AND name = ? COLLATE NOCASE",

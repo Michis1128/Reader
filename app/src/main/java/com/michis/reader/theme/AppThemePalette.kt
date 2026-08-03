@@ -178,11 +178,12 @@ object AppThemePalette {
                 view.setRoundedBackground(colors.accent, radiusDp = 14f)
                 view.setTextColor(colors.onAccent)
                 view.minimumHeight = (44 * view.resources.displayMetrics.density).toInt()
-                view.ensureOuterMargins(horizontalDp = 3, verticalDp = 2)
+                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 4)
             }
             is EditText -> {
                 view.setTextColor(childText); view.setHintTextColor(ColorUtils.setAlphaComponent(childText, 145))
                 view.backgroundTintList = ColorStateList.valueOf(colors.accent)
+                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
             }
             is Spinner -> {
                 val horizontal = (12 * view.resources.displayMetrics.density).toInt()
@@ -194,7 +195,7 @@ object AppThemePalette {
                 view.backgroundTintList = null
                 view.setRoundedBackground(colors.card, radiusDp = 12f)
                 view.isLongClickable = true
-                view.setOnLongClickListener { true }
+                if (view !is com.michis.reader.ui.LimitedHeightSpinner) view.setOnLongClickListener { true }
                 (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { parameters ->
                     parameters.marginStart = maxOf(parameters.marginStart, outsideHorizontal)
                     parameters.marginEnd = maxOf(parameters.marginEnd, outsideHorizontal)

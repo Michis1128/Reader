@@ -26,16 +26,21 @@
     <SeekBar
         android:id="@+id/compactProgressSlider"
         android:layout_width="match_parent"
-        android:layout_height="28dp"
+        android:layout_height="18dp"
         android:layout_gravity="bottom"
-        android:layout_marginStart="20dp"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="8dp"
-        android:alpha="0.76"
+        android:layout_marginStart="26dp"
+        android:layout_marginEnd="26dp"
+        android:layout_marginBottom="7dp"
+        android:alpha="0.62"
         android:contentDescription="Desplazarse por el libro"
         android:max="1"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp"
+        android:maxHeight="2dp"
+        android:minHeight="2dp"
+        android:paddingStart="5dp"
+        android:paddingEnd="5dp"
+        android:progressDrawable="@drawable/reader_compact_slider_track"
+        android:splitTrack="false"
+        android:thumb="@drawable/reader_compact_slider_thumb"
         android:visibility="gone" />
 
     <FrameLayout

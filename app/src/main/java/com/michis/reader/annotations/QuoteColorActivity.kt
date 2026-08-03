@@ -6,6 +6,7 @@ import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
 
+import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -38,6 +39,22 @@ class QuoteColorActivity : ComponentActivity() {
         binding.selectedText.text = selectedText
         binding.noteInput.setText(existingQuote?.note.orEmpty())
         binding.saveQuoteButton.text = if (existingQuote == null) "Aplicar color y guardar cita" else "Guardar cambios"
+        binding.deleteQuoteButton.apply {
+            visibility = if (existingQuote == null) View.GONE else View.VISIBLE
+            setOnClickListener {
+                val quote = existingQuote ?: return@setOnClickListener
+                AlertDialog.Builder(this@QuoteColorActivity)
+                    .setTitle("Eliminar cita")
+                    .setMessage("La cita se eliminará de este libro y el cambio se sincronizará con Drive.")
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Eliminar") { _, _ ->
+                        database.deleteAnnotation(quote.identifier)
+                        Toast.makeText(this@QuoteColorActivity, "Cita eliminada", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
+                    .show()
+            }
+        }
         updateColorPreview(binding)
         binding.colorPreview.setOnClickListener { showColorPicker(binding) }
         binding.saveQuoteButton.setOnClickListener {
