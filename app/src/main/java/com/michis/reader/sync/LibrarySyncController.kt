@@ -7,10 +7,7 @@ import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import androidx.work.WorkInfo
 
 /** Estado y ejecución manual de la sincronización de biblioteca con Drive. */
 internal class LibrarySyncController(
@@ -20,6 +17,30 @@ internal class LibrarySyncController(
     private val openSettings: () -> Unit,
     private val refreshLibrary: () -> Unit
 ) {
+    private val scheduler = AutomaticDriveSyncScheduler(activity)
+
+    init {
+        scheduler.immediateSyncWorkInfos().observe(activity) { workInfos ->
+            val workInfo = scheduler.latestImmediateWorkInfo(workInfos) ?: return@observe
+            val active = workInfo.state == WorkInfo.State.ENQUEUED ||
+                workInfo.state == WorkInfo.State.BLOCKED || workInfo.state == WorkInfo.State.RUNNING
+            syncButton.isEnabled = !active
+            statusText.text = when (workInfo.state) {
+                WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
+                    "Sincronización: en espera de conexión…"
+                WorkInfo.State.RUNNING -> "Sincronización: ${workInfo.progress.getString(
+                    GoogleDriveSyncWorker.KEY_PROGRESS_MESSAGE
+                ) ?: "trabajando en segundo plano…"}"
+                WorkInfo.State.SUCCEEDED -> {
+                    refreshLibrary()
+                    "Sincronización: ${scheduler.lastStatus()}"
+                }
+                WorkInfo.State.FAILED -> "Sincronización: ${scheduler.lastStatus()}"
+                WorkInfo.State.CANCELLED -> "Sincronización: cancelada"
+            }
+        }
+    }
+
     fun refreshStatus() {
         val session = OptionalGoogleAccountManager(activity).currentSession()
         val authorization = GoogleDriveAuthorizationManager(activity)
@@ -28,7 +49,7 @@ internal class LibrarySyncController(
             session == null -> "Sincronización: cuenta de Google no conectada"
             !authorization.isAuthorized() -> "Sincronización: Drive no autorizado"
             folder == null -> "Sincronización: carpeta no preparada"
-            else -> "Sincronización: ${AutomaticDriveSyncScheduler(activity).lastStatus()}"
+            else -> "Sincronización: ${scheduler.lastStatus()}"
         }
     }
 
@@ -57,30 +78,9 @@ internal class LibrarySyncController(
                     finishWorking("Sincronización: Google no concedió acceso")
                     return@addOnSuccessListener
                 }
-                activity.lifecycleScope.launch {
-                    val syncResult = runCatching {
-                        withContext(Dispatchers.IO) {
-                            GoogleDriveSyncCoordinator(activity).synchronize(
-                                accessToken, session.accountIdentifier, folder, folderRepository
-                            ) { step ->
-                                activity.runOnUiThread { statusText.text = "Sincronización: $step" }
-                            }
-                        }
-                    }
-                    syncResult.onSuccess { synchronized ->
-                        val status = "Correcta: ${synchronized.documentCount} libros sincronizados"
-                        AutomaticDriveSyncScheduler(activity).saveStatus(status)
-                        statusText.text = "Sincronización: $status"
-                        refreshLibrary()
-                        message("Sincronización verificada")
-                    }.onFailure { error ->
-                        val status = "Error: ${error.message.orEmpty()}"
-                        AutomaticDriveSyncScheduler(activity).saveStatus(status)
-                        statusText.text = "Sincronización: $status"
-                        message("No se pudo sincronizar", true)
-                    }
-                    syncButton.isEnabled = true
-                }
+                scheduler.enqueueImmediateSync()
+                statusText.text = "Sincronización: preparada para ejecutarse en segundo plano…"
+                message("La sincronización continuará en segundo plano")
             }
             .addOnFailureListener { error ->
                 finishWorking("Sincronización: error de autorización")

@@ -176,6 +176,8 @@ Esta es la zona de mayor riesgo.
 9. La sincronización manual puede reconciliar el conjunto completo, pero no debe volver a subir EPUB sin cambios.
 10. Respetar la preferencia `solo Wi‑Fi` frente a `datos móviles`; las tareas automáticas deben mantener sus restricciones de WorkManager.
 11. Un reinicio de libro es una mutación sincronizable: progreso a cero y tombstones para citas, marcadores, categorías, entradas y vínculos afectados.
+12. Toda sincronización larga de Drive, incluida la iniciada manualmente, debe encolarse mediante `AutomaticDriveSyncScheduler` y ejecutarse en `GoogleDriveSyncWorker`. Las actividades solo resuelven autorizaciones que requieren UI, encolan y observan el progreso; nunca deben sostener una sincronización con `lifecycleScope`.
+13. La sincronización completa y la sincronización de un libro comparten el bloqueo de `GoogleDriveSyncCoordinator`; no crear rutas paralelas que omitan esa serialización.
     - `last_opened_at = -1` es el marcador interno de reinicio intencional. No lo normalices a cero: cero identifica un libro nuevo y permite restaurar progreso remoto durante una reinstalación.
     - Las fusiones deben ignorar entidades remotas cuya versión sea anterior o igual a un tombstone local.
 12. Antes de cambiar el esquema, aumenta la versión de `ReaderDatabase` y escribe una migración incremental que preserve instalaciones existentes. No dependas solo de `onCreate`.

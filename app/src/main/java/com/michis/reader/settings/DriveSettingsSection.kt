@@ -26,6 +26,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.lifecycleScope
+import androidx.work.WorkInfo
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +43,9 @@ class DriveSettingsSection(
     private var lastFullSyncText: String? = null
     private var pendingAuthorizationResult: ((AuthorizationResult?) -> Unit)? = null
     private var panelToRefresh: LinearLayout? = null
+    private var synchronizationPanel: LinearLayout? = null
+    private val syncScheduler = AutomaticDriveSyncScheduler(activity)
+    private var syncObserverAttached = false
 
     private val libraryPickerLauncher = activity.registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -69,8 +73,31 @@ class DriveSettingsSection(
 
     fun createPanel(): View {
         val binding = ViewDriveSettingsPanelBinding.inflate(activity.layoutInflater)
+        observeBackgroundSync(binding.panelContainer)
         render(binding.panelContainer)
         return binding.root
+    }
+
+    private fun observeBackgroundSync(container: LinearLayout) {
+        synchronizationPanel = container
+        if (syncObserverAttached) return
+        syncObserverAttached = true
+        syncScheduler.immediateSyncWorkInfos().observe(activity) { workInfos ->
+            val workInfo = syncScheduler.latestImmediateWorkInfo(workInfos) ?: return@observe
+            fullSyncInProgress = workInfo.state == WorkInfo.State.ENQUEUED ||
+                workInfo.state == WorkInfo.State.BLOCKED || workInfo.state == WorkInfo.State.RUNNING
+            lastFullSyncText = when (workInfo.state) {
+                WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
+                    "Sincronización en espera de conexión. Puedes seguir usando la app."
+                WorkInfo.State.RUNNING -> workInfo.progress.getString(
+                    GoogleDriveSyncWorker.KEY_PROGRESS_MESSAGE
+                ) ?: "Sincronización ejecutándose en segundo plano…"
+                WorkInfo.State.SUCCEEDED, WorkInfo.State.FAILED -> syncScheduler.lastStatus()
+                WorkInfo.State.CANCELLED -> "Sincronización cancelada."
+            }
+            if (!fullSyncInProgress) fullSyncConfirmationArmed = false
+            synchronizationPanel?.let(::render)
+        }
     }
 
     private fun render(container: LinearLayout) {
@@ -161,7 +188,7 @@ class DriveSettingsSection(
                             render(container)
                         } else {
                             isEnabled = false; fullSyncInProgress = true
-                            synchronize(session, authorizationManager, folderRepository, savedFolder, container, this)
+                            synchronize(session, authorizationManager, container, this)
                         }
                     }
                 })
@@ -294,39 +321,17 @@ class DriveSettingsSection(
     private fun synchronize(
         session: GoogleAccountSession,
         authorizationManager: GoogleDriveAuthorizationManager,
-        repository: GoogleDriveFolderRepository,
-        folder: GoogleDriveFolder,
         container: LinearLayout,
         sourceButton: Button
     ) = requestAuthorization(session, authorizationManager, container, sourceButton, onFailure = {
         fullSyncInProgress = false; fullSyncConfirmationArmed = false; render(container)
-    }) { accessToken ->
-        activity.lifecycleScope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    GoogleDriveSyncCoordinator(activity).synchronize(
-                        accessToken, session.accountIdentifier, folder, repository
-                    ) { step ->
-                        activity.runOnUiThread {
-                            lastFullSyncText = step
-                            render(container)
-                        }
-                    }
-                }
-            }.onSuccess { synced ->
-                fullSyncInProgress = false; fullSyncConfirmationArmed = false
-                lastFullSyncText = if (synced.firstBackup) {
-                    "Sincronización inicial completada: ${synced.documentCount} libros respaldados."
-                } else {
-                    "Sincronización incremental completada: ${synced.documentCount} libros registrados y " +
-                        "${synced.downloadedDocumentCount} EPUB nuevos o modificados descargados."
-                }
-                render(container); Toast.makeText(activity, "Sincronización verificada", Toast.LENGTH_LONG).show()
-            }.onFailure { error ->
-                fullSyncInProgress = false; fullSyncConfirmationArmed = false; sourceButton.isEnabled = true
-                Toast.makeText(activity, "Falló la sincronización: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
-            }
-        }
+    }) { _ ->
+        syncScheduler.enqueueImmediateSync()
+        fullSyncConfirmationArmed = false
+        lastFullSyncText = "Sincronización preparada para ejecutarse en segundo plano…"
+        sourceButton.isEnabled = true
+        render(container)
+        Toast.makeText(activity, "Puedes seguir usando la app mientras se sincroniza", Toast.LENGTH_LONG).show()
     }
 
     private fun automaticSyncControls(): View {
