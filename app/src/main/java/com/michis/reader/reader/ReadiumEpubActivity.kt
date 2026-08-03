@@ -52,7 +52,6 @@ import org.readium.r2.shared.util.http.DefaultHttpClient
 import org.readium.r2.shared.util.toAbsoluteUrl
 import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
-import java.util.ArrayDeque
 
 class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var screenBinding: ActivityReadiumEpubBinding
@@ -71,6 +70,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var dictionaryButton: Button
     private lateinit var pageJumpActions: LinearLayout
     private lateinit var jumpBackButton: Button
+    private lateinit var clearJumpHistoryButton: Button
     private lateinit var jumpForwardButton: Button
     private lateinit var navigator: EpubNavigatorFragment
     private var currentPreferences = EpubPreferences(publisherStyles = false)
@@ -83,8 +83,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var decorationController: EpubDecorationController
     private var quickModeGestureIsActive = false
     private var lastBookmarkActionAt = 0L
-    private val jumpBackPages = ArrayDeque<Int>()
-    private val jumpForwardPages = ArrayDeque<Int>()
+    private val pageJumpHistory = PageJumpHistory()
     private var sliderJumpOriginPage: Int? = null
     private var pendingContentsJumpOriginPage: Int? = null
     private var pendingContentsJumpToken = 0
@@ -174,6 +173,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         progressSlider = binding.progressSlider
         pageJumpActions = binding.pageJumpActions
         jumpBackButton = binding.jumpBackButton.apply { setOnClickListener { returnToPreviousJump() } }
+        clearJumpHistoryButton = binding.clearJumpHistoryButton.apply { setOnClickListener { clearPageJumpHistory() } }
         jumpForwardButton = binding.jumpForwardButton.apply { setOnClickListener { advanceToNextJump() } }
         progressSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seekBar: SeekBar) {
@@ -469,40 +469,42 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun recordPageJump(originPage: Int, destinationPage: Int) {
         if (originPage == destinationPage || originPage !in pagePositions.indices || destinationPage !in pagePositions.indices) return
-        if (jumpBackPages.peekLast() != originPage) jumpBackPages.addLast(originPage)
-        jumpForwardPages.clear()
+        pageJumpHistory.recordJump(originPage, destinationPage)
         updatePageJumpActions()
     }
 
     private fun returnToPreviousJump() {
-        val destination = jumpBackPages.pollLast() ?: return
-        val current = currentPageIndex()
-        if (current != destination) jumpForwardPages.addLast(current)
+        val destination = pageJumpHistory.moveBack() ?: return
         navigateToPage(destination, animated = false)
         updatePageJumpActions()
     }
 
     private fun advanceToNextJump() {
-        val destination = jumpForwardPages.pollLast() ?: return
-        val current = currentPageIndex()
-        if (current != destination) jumpBackPages.addLast(current)
+        val destination = pageJumpHistory.moveForward() ?: return
         navigateToPage(destination, animated = false)
         updatePageJumpActions()
     }
 
+    private fun clearPageJumpHistory() {
+        pageJumpHistory.clear()
+        updatePageJumpActions()
+        Toast.makeText(this, "Historial de saltos eliminado", Toast.LENGTH_SHORT).show()
+    }
+
     private fun updatePageJumpActions() {
         if (!::pageJumpActions.isInitialized) return
-        val backPage = jumpBackPages.peekLast()
-        val forwardPage = jumpForwardPages.peekLast()
+        val backPage = pageJumpHistory.previousPageIndex
+        val forwardPage = pageJumpHistory.nextPageIndex
         jumpBackButton.apply {
-            visibility = if (backPage == null) View.GONE else View.VISIBLE
+            visibility = if (backPage == null) View.INVISIBLE else View.VISIBLE
             if (backPage != null) text = "Regresar a página ${backPage + 1}"
         }
+        clearJumpHistoryButton.visibility = if (pageJumpHistory.hasNavigation) View.VISIBLE else View.GONE
         jumpForwardButton.apply {
-            visibility = if (forwardPage == null) View.GONE else View.VISIBLE
+            visibility = if (forwardPage == null) View.INVISIBLE else View.VISIBLE
             if (forwardPage != null) text = "Avanzar a página ${forwardPage + 1}"
         }
-        pageJumpActions.visibility = if (backPage == null && forwardPage == null) View.GONE else View.VISIBLE
+        pageJumpActions.visibility = if (pageJumpHistory.hasNavigation) View.VISIBLE else View.GONE
     }
 
     private fun navigateOnePage(direction: Int) {
