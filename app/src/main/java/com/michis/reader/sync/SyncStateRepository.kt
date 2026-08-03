@@ -40,7 +40,9 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
                     if (cursor.moveToFirst()) Triple(cursor.getDouble(0), cursor.getInt(1), cursor.getLong(2))
                     else Triple(0.0, 0, 0L)
                 }
-                val localIsUntouched = localReadingState.first <= 0.0 && localReadingState.second <= 0 && localReadingState.third <= 0L
+                val localIsUntouched = localReadingState.first <= 0.0 &&
+                    localReadingState.second <= 0 &&
+                    localReadingState.third == 0L
                 val remoteHasProgress = remoteDocument.optDouble("progress", 0.0) > 0.0 ||
                     remoteDocument.optInt("readerLocation", 0) > 0
                 if (remoteUpdatedAt > localUpdatedAt || (localIsUntouched && remoteHasProgress)) {
@@ -60,6 +62,7 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
                     val syncIdentifier = remote.optString("syncId")
                     if (kind !in setOf("cita", "marcador") || syncIdentifier.isBlank()) continue
                     val annotationUpdatedAt = remote.optLong("updatedAt", 0)
+                    if (hasNewerOrEqualTombstone("annotation", syncIdentifier, annotationUpdatedAt)) continue
                     val local = database.readableDatabase.rawQuery(
                         "SELECT identifier, updated_at FROM annotations WHERE sync_id = ?",
                         arrayOf(syncIdentifier)
@@ -94,6 +97,12 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
         }
         return ReadingMergeResult(progressUpdates, insertedAnnotations, updatedAnnotations, ignoredLocalNewer)
     }
+
+    private fun hasNewerOrEqualTombstone(entityType: String, syncIdentifier: String, updatedAt: Long): Boolean =
+        database.readableDatabase.rawQuery(
+            "SELECT deleted_at FROM sync_tombstones WHERE entity_type = ? AND sync_id = ?",
+            arrayOf(entityType, syncIdentifier)
+        ).use { cursor -> cursor.moveToFirst() && cursor.getLong(0) >= updatedAt }
 
     fun dictionaryLinks(): List<SyncDictionaryLink> = database.readableDatabase.rawQuery(
         "SELECT owner_document_identifier, linked_document_identifier, sync_id, updated_at " +
@@ -211,6 +220,7 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
     private fun deletionTarget(tombstone: SyncTombstone): SyncDeletionTarget? {
         val specification = when (tombstone.entityType) {
             "annotation" -> Triple("annotations", "updated_at", "kind || ': ' || CASE WHEN selected_text = '' THEN 'página ' || page_number ELSE selected_text END")
+            "dictionary_category" -> Triple("dictionary_categories", "updated_at", "'Subcategoría: ' || name")
             "dictionary_entry" -> Triple("dictionary_entries", "updated_at", "'Diccionario: ' || term")
             "dictionary_link" -> Triple("dictionary_document_links", "updated_at", "'Vínculo de diccionario compartido'")
             else -> return null

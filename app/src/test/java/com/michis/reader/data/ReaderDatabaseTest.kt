@@ -53,11 +53,46 @@ class ReaderDatabaseTest {
         assertEquals(0, database.readerLocation(documentIdentifier))
         val restoredDocument = requireNotNull(database.findDocument(documentIdentifier))
         assertEquals(0f, restoredDocument.progress, 0f)
+        assertEquals(ReaderDatabase.RESET_LAST_OPENED_SENTINEL, restoredDocument.lastOpenedAt)
         assertTrue(database.annotations(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
         assertTrue(database.linkedDocuments(documentIdentifier).isEmpty())
         assertTrue(database.syncTombstones().isNotEmpty())
+    }
+
+    @Test
+    fun resetBookIsNotUndoneByOlderRemoteState() {
+        val documentIdentifier = database.saveDocument("content://books/reset-sync.epub", "reset-sync.epub")
+        database.updateProgress(documentIdentifier, location = 220, progress = 0.55f)
+        database.addAnnotation(documentIdentifier, "cita", "Texto anterior", "Nota", 0xFFFFCC00.toInt(), 220, 8)
+        val annotation = database.annotations(documentIdentifier).single()
+        val annotationSync = database.annotationSyncMetadata(annotation.identifier)
+        val documentUpdatedBeforeReset = database.documentSyncMetadata(documentIdentifier).updatedAt
+
+        database.resetBook(documentIdentifier)
+        val remoteState = JSONObject().apply {
+            put("updatedAt", documentUpdatedBeforeReset)
+            put("progress", 0.55)
+            put("readerLocation", 220)
+            put("lastOpenedAt", documentUpdatedBeforeReset)
+            put("annotations", JSONArray().put(JSONObject().apply {
+                put("syncId", annotationSync.syncIdentifier)
+                put("updatedAt", annotationSync.updatedAt)
+                put("kind", "cita")
+                put("selectedText", "Texto anterior")
+                put("note", "Nota")
+                put("color", 0xFFFFCC00.toInt())
+                put("location", 220)
+                put("pageNumber", 8)
+            }))
+        }
+
+        database.mergeReadingState(listOf(documentIdentifier to remoteState))
+
+        assertEquals(0, database.readerLocation(documentIdentifier))
+        assertEquals(0f, requireNotNull(database.findDocument(documentIdentifier)).progress, 0f)
+        assertTrue(database.annotations(documentIdentifier).isEmpty())
     }
 
     @Test
@@ -82,9 +117,26 @@ class ReaderDatabaseTest {
     fun deletingDictionaryCategoryAlsoDeletesItsEntries() {
         val documentIdentifier = database.saveDocument("content://books/delete-dictionary.epub", "delete-dictionary.epub")
         val categoryIdentifier = database.createDictionaryCategory(documentIdentifier, "Personajes")
-        database.saveDictionaryEntry(documentIdentifier, categoryIdentifier, "Alicia", "Protagonista", "")
+        val entryIdentifier = database.saveDictionaryEntry(documentIdentifier, categoryIdentifier, "Alicia", "Protagonista", "")
+        val categorySync = database.dictionaryCategorySyncMetadata(categoryIdentifier)
+        val entrySync = database.dictionaryEntrySyncMetadata(entryIdentifier)
 
         database.deleteDictionaryCategory(categoryIdentifier)
+
+        val olderRemoteDictionary = JSONObject().apply {
+            put("dictionaryCategories", JSONArray().put(JSONObject().apply {
+                put("syncId", categorySync.syncIdentifier)
+                put("updatedAt", categorySync.updatedAt)
+                put("name", "Personajes")
+                put("entries", JSONArray().put(JSONObject().apply {
+                    put("syncId", entrySync.syncIdentifier)
+                    put("updatedAt", entrySync.updatedAt)
+                    put("term", "Alicia")
+                    put("description", "Protagonista")
+                }))
+            }))
+        }
+        database.mergeDictionaryState(listOf(documentIdentifier to olderRemoteDictionary), emptyMap())
 
         assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())

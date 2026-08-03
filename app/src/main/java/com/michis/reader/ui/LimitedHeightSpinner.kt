@@ -6,7 +6,9 @@ import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.ListView
@@ -22,6 +24,22 @@ class LimitedHeightSpinner @JvmOverloads constructor(
     defaultStyleAttribute: Int = android.R.attr.spinnerStyle
 ) : Spinner(context, attributes, defaultStyleAttribute, MODE_DROPDOWN) {
     private var optionsPopup: PopupWindow? = null
+    private var touchStartedAt = 0L
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> touchStartedAt = event.eventTime
+            MotionEvent.ACTION_UP -> if (event.eventTime - touchStartedAt >= ViewConfiguration.getLongPressTimeout()) {
+                isPressed = false
+                cancelLongPress()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> touchStartedAt = 0L
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performLongClick(): Boolean = true
 
     override fun performClick(): Boolean {
         val currentAdapter = adapter ?: return false

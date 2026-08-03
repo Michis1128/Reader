@@ -116,6 +116,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Los toques laterales cambian de página y el toque central alterna controles, salvo cuando se acaba de activar una decoración o cerrar un panel.
 - En vertical, Índice, Citas, Diccionario y Marcador viven bajo Herramientas. En horizontal aparecen como botones separados. Aa permanece independiente.
 - El panel Aa y los demás menús deben respetar la paleta global de menús.
+- Los saltos realizados con cualquiera de los sliders o con el índice alimentan un historial de navegación. Con los controles visibles se ofrecen `Regresar a página #` y `Avanzar a página #` cuando corresponda.
 - Las preferencias de lectura son globales entre libros: tema, fuente, tamaño, grosor, interlineado, alineación, márgenes, orientación/paginación y opciones relacionadas.
 - El cambio rápido alterna únicamente entre los dos temas configurados; no cambia tipografía ni dimensiones.
 - El contenido inicia en la parte superior. La alineación horizontal sigue siendo configurable.
@@ -129,6 +130,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Se muestran como resaltado, no subrayado.
 - Tocar una cita resaltada dentro del EPUB abre directamente su editor.
 - Tocar una tarjeta en `BookQuotesActivity` abre el editor; el botón `Abrir` navega a la posición de lectura.
+- Una cita solo se elimina desde su editor y después de una confirmación. No reincorpores eliminación directa ni selección múltiple destructiva en los listados.
 - La edición debe actualizar `updated_at` para que Drive detecte el cambio.
 - Tras volver al lector se deben refrescar las decoraciones.
 
@@ -173,6 +175,8 @@ Esta es la zona de mayor riesgo.
 9. La sincronización manual puede reconciliar el conjunto completo, pero no debe volver a subir EPUB sin cambios.
 10. Respetar la preferencia `solo Wi‑Fi` frente a `datos móviles`; las tareas automáticas deben mantener sus restricciones de WorkManager.
 11. Un reinicio de libro es una mutación sincronizable: progreso a cero y tombstones para citas, marcadores, categorías, entradas y vínculos afectados.
+    - `last_opened_at = -1` es el marcador interno de reinicio intencional. No lo normalices a cero: cero identifica un libro nuevo y permite restaurar progreso remoto durante una reinstalación.
+    - Las fusiones deben ignorar entidades remotas cuya versión sea anterior o igual a un tombstone local.
 12. Antes de cambiar el esquema, aumenta la versión de `ReaderDatabase` y escribe una migración incremental que preserve instalaciones existentes. No dependas solo de `onCreate`.
 
 Para cambios de sincronización, lee completos antes de editar: `IncrementalLibrarySyncCoordinator`, `SyncStateRepository`, `LibrarySyncSnapshotBuilder`, los mergers involucrados y sus pruebas.

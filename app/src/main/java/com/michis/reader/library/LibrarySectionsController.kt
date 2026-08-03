@@ -30,7 +30,7 @@ internal class LibrarySectionsController(
         prepareSection()
         val annotations = database.annotations().filter { it.kind == kind }
         if (annotations.isEmpty()) addEmpty("Las citas, notas y marcadores de todos tus libros aparecerán aquí.")
-        if (annotations.isNotEmpty()) {
+        if (annotations.isNotEmpty() && kind != "cita") {
             val actionBinding = ViewActionButtonBinding.inflate(activity.layoutInflater, container, false)
             actionBinding.actionButton.apply {
                 text = "Seleccionar ${if (kind == "cita") "citas" else "marcadores"} para eliminar"

@@ -215,7 +215,11 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
         links.forEach { synchronization.deleteDictionaryLink(it.ownerDocumentIdentifier, it.linkedDocumentIdentifier) }
         val now = System.currentTimeMillis()
         writableDatabase.update("documents", ContentValues().apply {
-            put("progress", 0f); put("reader_location", 0); put("last_opened_at", 0); put("updated_at", now)
+            put("progress", 0f)
+            put("reader_location", 0)
+            // Distingue un reinicio intencional de un EPUB recién importado.
+            put("last_opened_at", RESET_LAST_OPENED_SENTINEL)
+            put("updated_at", now)
         }, "identifier = ?", arrayOf(identifier.toString()))
         return BookResetResult(annotations.size, entries.size, categories.size)
     }
@@ -312,6 +316,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     companion object {
         const val DUPLICATE_DICTIONARY_ENTRY = -2L
+        const val RESET_LAST_OPENED_SENTINEL = -1L
 
         @Volatile
         private var sharedInstance: ReaderDatabase? = null

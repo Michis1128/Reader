@@ -9,6 +9,38 @@
     android:paddingEnd="14dp"
     android:paddingBottom="7dp">
 
+    <LinearLayout
+        android:id="@+id/pageJumpActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/jumpBackButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="Regresar a página 1"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/jumpForwardButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing"
+            android:layout_weight="1"
+            android:minWidth="0dp"
+            android:text="Avanzar a página 1"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/progressLabel"
         android:layout_width="match_parent"
