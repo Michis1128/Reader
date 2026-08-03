@@ -19,6 +19,7 @@
 
         <Button
             android:id="@+id/jumpBackButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -30,6 +31,7 @@
 
         <Button
             android:id="@+id/clearJumpHistoryButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing"
@@ -42,6 +44,7 @@
 
         <Button
             android:id="@+id/jumpForwardButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing"

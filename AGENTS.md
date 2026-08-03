@@ -75,6 +75,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - `theme/ReadingThemePalette.kt`: temas disponibles para el contenido EPUB.
 - `theme/KvColorPickerOverlay.kt`: único punto de entrada para escoger colores.
 - `ui/ScreenHeader.kt`: encabezado fijo y regreso visible.
+- `ui/SystemBarInsets.kt`: aplicación compartida de barras del sistema y notch en actividades normales; no dupliques listeners de insets por pantalla.
 - `ui/LimitedHeightSpinner.kt`: desplegable temático con altura limitada. Debe conservar constructores compatibles con inflación XML.
 
 ### Google Drive y sincronización
@@ -187,6 +188,9 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 - El contenido desplazable no debe dibujarse encima de la barra de estado, salvo la experiencia inmersiva intencional del lector.
 - Usa los estilos compartidos de `styles.xml`, dimensiones de `dimens.xml`, layouts reutilizables y View Binding.
 - Mantén separación entre botones; no deben tocarse. Evita controles tan grandes que oculten acciones en teléfonos verticales.
+- Todos los botones XML usan `Widget.MichisReader.Button`; los creados dinámicamente reciben la misma geometría mediante `AppThemePalette`. Su forma es de píldora, con radio de 24 dp y altura mínima de 48 dp.
+- Inputs y spinners usan radio de 16 dp, borde temático y los márgenes compartidos de `dimens.xml`. No agregues controles visualmente aislados con formas o separaciones propias sin una razón funcional.
+- Usa `ui_component_margin_horizontal`, `ui_component_margin_vertical` y las variantes `ui_content_spacing*` para separar componentes; evita nuevos márgenes arbitrarios codificados directamente.
 - Los paneles editables usan tarjetas/rectángulos redondeados con padding interno; títulos de sección quedan fuera cuando así está establecido.
 - Antes de aplicar `AppThemePalette.apply(activity)`, marca fondos especiales con `markBackground`, `markSurface` o `markCard`.
 - Las vistas añadidas después del primer render deben volver a recibir el tema, normalmente con `content.post { AppThemePalette.apply(activity) }`.

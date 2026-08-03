@@ -235,7 +235,6 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
     fun annotations(documentIdentifier: Long? = null) = annotationsRepository.annotations(documentIdentifier)
 
     fun deleteAnnotation(identifier: Long) = synchronization.deleteEntity("annotations", "annotation", identifier)
-    fun updateAnnotationColor(identifier: Long, color: Int) = annotationsRepository.updateAnnotationColor(identifier, color)
     fun updateQuote(identifier: Long, note: String, color: Int) = annotationsRepository.updateQuote(identifier, note, color)
 
     fun bookmarkAt(documentIdentifier: Long, location: Int) = annotationsRepository.bookmarkAt(documentIdentifier, location)

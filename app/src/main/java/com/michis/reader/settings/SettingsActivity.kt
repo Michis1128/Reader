@@ -14,6 +14,7 @@ import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
 import com.michis.reader.ui.ScreenHeader
+import com.michis.reader.ui.SystemBarInsets
 
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -23,7 +24,6 @@ import android.os.Build
 import android.text.InputFilter
 import android.text.InputType
 import android.view.View
-import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
 import com.samsung.android.sdk.penremote.SpenRemote
@@ -50,7 +50,7 @@ class SettingsActivity : ComponentActivity() {
             if (advancedSyncMode) "Drive avanzado" else getString(R.string.settings_title)
         ) { finish() }
         binding.contentContainer.addView(screen, FrameLayout.LayoutParams(-1, -2))
-        applyInsets(binding.rootContainer)
+        SystemBarInsets.apply(binding.rootContainer)
         setContentView(binding.root)
         AppThemePalette.apply(this)
     }
@@ -327,16 +327,6 @@ class SettingsActivity : ComponentActivity() {
     private fun description(value: String) =
         ViewSettingsDescriptionBinding.inflate(layoutInflater).root.apply { text = value }
 
-    private fun applyInsets(view: View) {
-        val originalLeft = view.paddingLeft; val originalTop = view.paddingTop
-        val originalRight = view.paddingRight; val originalBottom = view.paddingBottom
-        view.setOnApplyWindowInsetsListener { target, insets ->
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                target.setPadding(originalLeft + bars.left, originalTop + bars.top, originalRight + bars.right, originalBottom + bars.bottom)
-            }; insets
-        }
-    }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
     companion object { private const val EXTRA_ADVANCED_SYNC = "advanced_sync_settings" }

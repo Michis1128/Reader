@@ -6,12 +6,19 @@
         <item name="android:navigationBarColor">#F7F7F9</item>
         <item name="android:statusBarColor">#F7F7F9</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:buttonStyle">@style/Widget.MichisReader.Button</item>
+        <item name="android:editTextStyle">@style/Widget.MichisReader.Input</item>
+        <item name="android:spinnerStyle">@style/Widget.MichisReader.Spinner</item>
     </style>
 
     <!-- Valores visuales base. AppThemePalette sustituye los colores en tiempo de
          ejecución, mientras estos estilos conservan geometría y espaciado. -->
     <style name="Widget.MichisReader.Card" parent="">
         <item name="android:background">@drawable/background_card</item>
+        <item name="android:layout_marginStart">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginTop">@dimen/ui_component_margin_vertical</item>
+        <item name="android:layout_marginEnd">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginBottom">@dimen/ui_component_margin_vertical</item>
         <item name="android:paddingStart">@dimen/ui_card_padding_horizontal</item>
         <item name="android:paddingTop">@dimen/ui_card_padding_vertical</item>
         <item name="android:paddingEnd">@dimen/ui_card_padding_horizontal</item>
@@ -20,6 +27,10 @@
 
     <style name="Widget.MichisReader.Button" parent="android:style/Widget.Material.Button">
         <item name="android:background">@drawable/background_button</item>
+        <item name="android:layout_marginStart">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginTop">@dimen/ui_component_margin_vertical</item>
+        <item name="android:layout_marginEnd">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginBottom">@dimen/ui_component_margin_vertical</item>
         <item name="android:minHeight">@dimen/ui_control_min_height</item>
         <item name="android:minWidth">0dp</item>
         <item name="android:paddingStart">@dimen/ui_control_padding_horizontal</item>
@@ -29,6 +40,10 @@
 
     <style name="Widget.MichisReader.Input" parent="android:style/Widget.Material.EditText">
         <item name="android:background">@drawable/background_input</item>
+        <item name="android:layout_marginStart">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginTop">@dimen/ui_component_margin_vertical</item>
+        <item name="android:layout_marginEnd">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginBottom">@dimen/ui_component_margin_vertical</item>
         <item name="android:minHeight">@dimen/ui_control_min_height</item>
         <item name="android:paddingStart">@dimen/ui_control_padding_horizontal</item>
         <item name="android:paddingEnd">@dimen/ui_control_padding_horizontal</item>
@@ -36,6 +51,10 @@
 
     <style name="Widget.MichisReader.Spinner" parent="android:style/Widget.Material.Spinner">
         <item name="android:background">@drawable/background_spinner</item>
+        <item name="android:layout_marginStart">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginTop">@dimen/ui_component_margin_vertical</item>
+        <item name="android:layout_marginEnd">@dimen/ui_component_margin_horizontal</item>
+        <item name="android:layout_marginBottom">@dimen/ui_component_margin_vertical</item>
         <item name="android:minHeight">@dimen/ui_control_min_height</item>
         <item name="android:paddingStart">@dimen/ui_control_padding_horizontal</item>
         <item name="android:paddingEnd">@dimen/ui_control_padding_horizontal</item>

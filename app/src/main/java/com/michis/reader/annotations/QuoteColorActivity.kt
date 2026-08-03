@@ -5,12 +5,12 @@ import com.michis.reader.databinding.ActivityQuoteColorBinding
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
+import com.michis.reader.ui.SystemBarInsets
 
 import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.view.WindowInsets
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 
@@ -74,7 +74,7 @@ class QuoteColorActivity : ComponentActivity() {
             Toast.makeText(this, if (existingQuote == null) "Cita guardada" else "Cita actualizada", Toast.LENGTH_SHORT).show()
             finish()
         }
-        applyInsets(binding.rootContainer)
+        SystemBarInsets.apply(binding.rootContainer)
         setContentView(binding.root)
         AppThemePalette.apply(this)
         if (existingQuote == null) showColorPicker(binding)
@@ -90,16 +90,6 @@ class QuoteColorActivity : ComponentActivity() {
     private fun updateColorPreview(binding: ActivityQuoteColorBinding) {
         binding.colorPreview.setBackgroundColor(selectedColor)
         binding.colorPreview.setTextColor(if (Color.luminance(selectedColor) < .45f) Color.WHITE else Color.BLACK)
-    }
-
-    private fun applyInsets(view: View) {
-        val left = view.paddingLeft; val top = view.paddingTop; val right = view.paddingRight; val bottom = view.paddingBottom
-        view.setOnApplyWindowInsetsListener { target, insets ->
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                target.setPadding(left + bars.left, top + bars.top, right + bars.right, bottom + bars.bottom)
-            }; insets
-        }
     }
 
     companion object {

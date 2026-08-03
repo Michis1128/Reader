@@ -9,6 +9,7 @@ import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.sync.drive.*
 import com.michis.reader.theme.AppThemePalette
 import com.michis.reader.ui.ScreenHeader
+import com.michis.reader.ui.SystemBarInsets
 
 import android.app.AlertDialog
 import android.os.Bundle
@@ -16,7 +17,6 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
 
@@ -80,17 +80,7 @@ class ResetBooksActivity : ComponentActivity() {
             renderDocuments()
         }
         binding.resetSelectedButton.setOnClickListener { confirmReset() }
-        applyInsets()
-    }
-
-    private fun applyInsets() {
-        binding.rootContainer.setOnApplyWindowInsetsListener { view, insets ->
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                view.setPadding(dp(14) + bars.left, dp(10) + bars.top, dp(14) + bars.right, dp(12) + bars.bottom)
-            }
-            insets
-        }
+        SystemBarInsets.apply(binding.rootContainer)
     }
 
     private fun renderDocuments() {

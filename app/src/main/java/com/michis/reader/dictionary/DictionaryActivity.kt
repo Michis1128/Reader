@@ -15,12 +15,12 @@ import com.michis.reader.databinding.ViewDictionarySelectionActionsBinding
 import com.michis.reader.settings.ReaderSettingsRepository
 import com.michis.reader.theme.*
 import com.michis.reader.ui.ScreenHeader
+import com.michis.reader.ui.SystemBarInsets
 
 import android.graphics.Color
 import android.app.AlertDialog
 import android.os.Bundle
 import android.view.View
-import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -47,7 +47,7 @@ class DictionaryActivity : ComponentActivity() {
         ScreenHeader.configure(this, binding.screenHeader, "") { navigateBack() }
         titleView = binding.screenHeader.titleText
         content = binding.contentContainer
-        applyInsets(binding.rootContainer)
+        SystemBarInsets.apply(binding.rootContainer)
         setContentView(binding.root)
         AppThemePalette.apply(this)
         val requestedEntry = database.findDictionaryEntry(intent.getLongExtra(EXTRA_ENTRY_IDENTIFIER, -1))
@@ -295,14 +295,6 @@ class DictionaryActivity : ComponentActivity() {
 
     private fun message(value: String) =
         ViewDictionaryMessageBinding.inflate(layoutInflater, content, false).root.apply { text = value }
-    private fun applyInsets(view: View) {
-        val originalLeft = view.paddingLeft; val originalTop = view.paddingTop
-        val originalRight = view.paddingRight; val originalBottom = view.paddingBottom
-        view.setOnApplyWindowInsetsListener { target, insets ->
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()).let {
-            target.setPadding(originalLeft + it.left, originalTop + it.top, originalRight + it.right, originalBottom + it.bottom)
-        }; insets
-    } }
     companion object {
         const val EXTRA_DOCUMENT_IDENTIFIER = "document_identifier"
         const val EXTRA_SELECTED_TEXT = "selected_text"
