@@ -10,7 +10,9 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkInfo
 import androidx.work.workDataOf
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class AutomaticDriveSyncScheduler(private val context: Context) {
@@ -44,14 +46,25 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
         )
     }
 
-    fun enqueueImmediateSync() {
+    fun enqueueImmediateSync(): UUID {
         val request = OneTimeWorkRequestBuilder<GoogleDriveSyncWorker>()
             .setConstraints(networkConstraints())
             .setInputData(workDataOf(GoogleDriveSyncWorker.KEY_MANUAL_EXECUTION to true))
             .build()
+        preferences.edit().putString(KEY_LAST_IMMEDIATE_WORK_ID, request.id.toString()).apply()
         WorkManager.getInstance(context).enqueueUniqueWork(
             IMMEDIATE_WORK_NAME, ExistingWorkPolicy.REPLACE, request
         )
+        return request.id
+    }
+
+    fun immediateSyncWorkInfos() = WorkManager.getInstance(context)
+        .getWorkInfosForUniqueWorkLiveData(IMMEDIATE_WORK_NAME)
+
+    fun latestImmediateWorkInfo(workInfos: List<WorkInfo>): WorkInfo? {
+        val identifier = preferences.getString(KEY_LAST_IMMEDIATE_WORK_ID, null)
+            ?.let { value -> runCatching { UUID.fromString(value) }.getOrNull() }
+        return workInfos.firstOrNull { it.id == identifier }
     }
 
     fun enqueueBookSync(documentIdentifier: Long) {
@@ -64,7 +77,7 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
             ))
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
-            BOOK_WORK_NAME, ExistingWorkPolicy.REPLACE, request
+            BOOK_WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request
         )
     }
 
@@ -85,6 +98,7 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
         private const val KEY_LAST_STATUS = "last_status"
         private const val KEY_LAST_ATTEMPT_AT = "last_attempt_at"
         private const val KEY_WIFI_ONLY = "wifi_only"
+        private const val KEY_LAST_IMMEDIATE_WORK_ID = "last_immediate_work_id"
         private const val DEFAULT_INTERVAL_MINUTES = 60L
         private const val UNIQUE_WORK_NAME = "michis_reader_periodic_drive_sync"
         private const val IMMEDIATE_WORK_NAME = "michis_reader_immediate_drive_sync"

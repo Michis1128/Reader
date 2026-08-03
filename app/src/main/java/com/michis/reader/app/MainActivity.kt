@@ -8,12 +8,12 @@ import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.settings.SettingsActivity
 import com.michis.reader.sync.*
 import com.michis.reader.theme.AppThemePalette
+import com.michis.reader.ui.SystemBarInsets
 
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.View
-import android.view.WindowInsets
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         syncController = LibrarySyncController(
             this, syncStatusText, syncButton, ::showGeneralSettings
         ) { refreshLibrary(searchInput.text?.toString().orEmpty()) }
-        applySafeSystemBarPadding(mainScreen)
+        SystemBarInsets.apply(mainScreen)
         setContentView(mainScreen)
         AppThemePalette.apply(this)
         restoreLastDocumentFolder()
@@ -232,37 +232,6 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Michis Reader solo admite libros EPUB", Toast.LENGTH_SHORT).show(); return
         }
         startActivity(Intent(this, ReadiumEpubActivity::class.java).putExtra("document_identifier", identifier))
-    }
-    private fun applySafeSystemBarPadding(view: View) {
-        val originalLeft = view.paddingLeft
-        val originalTop = view.paddingTop
-        val originalRight = view.paddingRight
-        view.setOnApplyWindowInsetsListener { target, windowInsets ->
-            val leftInset: Int
-            val topInset: Int
-            val rightInset: Int
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val systemBars = windowInsets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                leftInset = systemBars.left
-                topInset = systemBars.top
-                rightInset = systemBars.right
-            } else {
-                @Suppress("DEPRECATION")
-                leftInset = windowInsets.systemWindowInsetLeft
-                @Suppress("DEPRECATION")
-                topInset = windowInsets.systemWindowInsetTop
-                @Suppress("DEPRECATION")
-                rightInset = windowInsets.systemWindowInsetRight
-            }
-            target.setPadding(
-                originalLeft + leftInset,
-                originalTop + topInset,
-                originalRight + rightInset,
-                target.paddingBottom
-            )
-            windowInsets
-        }
-        view.requestApplyInsets()
     }
 }
 

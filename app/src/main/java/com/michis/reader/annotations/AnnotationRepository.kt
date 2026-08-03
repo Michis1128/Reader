@@ -54,16 +54,6 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         }
     }
 
-    fun updateAnnotationColor(identifier: Long, color: Int): Int = database.writableDatabase.update(
-        "annotations",
-        ContentValues().apply {
-            put("color", color)
-            put("updated_at", System.currentTimeMillis())
-        },
-        "identifier = ?",
-        arrayOf(identifier.toString())
-    )
-
     fun updateQuote(identifier: Long, note: String, color: Int): Int = database.writableDatabase.update(
         "annotations",
         ContentValues().apply {

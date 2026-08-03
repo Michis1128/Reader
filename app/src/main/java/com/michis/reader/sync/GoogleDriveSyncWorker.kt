@@ -6,6 +6,7 @@ import com.michis.reader.sync.drive.*
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -16,6 +17,7 @@ import kotlin.coroutines.resumeWithException
 class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) : CoroutineWorker(appContext, parameters) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val scheduler = AutomaticDriveSyncScheduler(applicationContext)
+        publishProgress(scheduler, "Preparando la sincronización…")
         if (!scheduler.isEnabled() && !inputData.getBoolean(KEY_MANUAL_EXECUTION, false)) return@withContext Result.success()
         val session = OptionalGoogleAccountManager(applicationContext).currentSession()
             ?: return@withContext statusSuccess(scheduler, "Omitida: no hay una cuenta conectada")
@@ -34,14 +36,15 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
                 ?: return@withContext statusSuccess(scheduler, "Pendiente: Google no entregó un token temporal")
             val documentIdentifier = inputData.getLong(KEY_DOCUMENT_IDENTIFIER, -1L)
             if (documentIdentifier >= 0) {
-                IncrementalLibrarySyncCoordinator(applicationContext).synchronizeBook(
+                publishProgress(scheduler, "Sincronizando los cambios del último libro…")
+                GoogleDriveSyncCoordinator(applicationContext).synchronizeBook(
                     accessToken, session.accountIdentifier, folder, repository, documentIdentifier
                 )
                 scheduler.saveStatus("Correcta: último libro sincronizado")
             } else {
                 val syncResult = GoogleDriveSyncCoordinator(applicationContext).synchronize(
                     accessToken, session.accountIdentifier, folder, repository
-                )
+                ) { step -> publishProgress(scheduler, step) }
                 scheduler.saveStatus("Correcta: ${syncResult.documentCount} libros sincronizados")
             }
             Result.success()
@@ -56,6 +59,11 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
         return Result.success()
     }
 
+    private fun publishProgress(scheduler: AutomaticDriveSyncScheduler, message: String) {
+        setProgressAsync(workDataOf(KEY_PROGRESS_MESSAGE to message))
+        scheduler.saveStatus("En curso: $message")
+    }
+
     private suspend fun com.google.android.gms.tasks.Task<AuthorizationResult>.awaitResult(): AuthorizationResult =
         suspendCancellableCoroutine { continuation ->
             addOnSuccessListener { if (continuation.isActive) continuation.resume(it) }
@@ -65,5 +73,6 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
     companion object {
         const val KEY_MANUAL_EXECUTION = "manual_execution"
         const val KEY_DOCUMENT_IDENTIFIER = "document_identifier"
+        const val KEY_PROGRESS_MESSAGE = "progress_message"
     }
 }

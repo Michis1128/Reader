@@ -701,6 +701,25 @@ class ReadiumEpubActivity : FragmentActivity() {
         val background = palette.surface
         val foreground = palette.primaryText
         val cardColor = palette.card
+        fun roundedControl(view: View, color: Int, radiusDp: Int, outline: Int? = null) {
+            val savedPadding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+            view.backgroundTintList = null
+            view.background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(color)
+                cornerRadius = dp(radiusDp).toFloat()
+                outline?.let { setStroke(dp(1), it) }
+            }
+            view.setPadding(savedPadding[0], savedPadding[1], savedPadding[2], savedPadding[3])
+            (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { parameters ->
+                val horizontalMargin = dp(4)
+                val verticalMargin = dp(5)
+                parameters.marginStart = maxOf(parameters.marginStart, horizontalMargin)
+                parameters.marginEnd = maxOf(parameters.marginEnd, horizontalMargin)
+                parameters.topMargin = maxOf(parameters.topMargin, verticalMargin)
+                parameters.bottomMargin = maxOf(parameters.bottomMargin, verticalMargin)
+                view.layoutParams = parameters
+            }
+        }
         fun recolor(view: View, inheritedText: Int = foreground) {
             val textColor = if (view.tag == MENU_CARD_TAG) AppThemePalette.textFor(cardColor) else inheritedText
             if (view.tag == MENU_SURFACE_TAG) view.setBackgroundColor(background)
@@ -721,7 +740,8 @@ class ReadiumEpubActivity : FragmentActivity() {
                     )
                 }
                 is Button -> {
-                    view.backgroundTintList = android.content.res.ColorStateList.valueOf(palette.accent)
+                    roundedControl(view, palette.accent, radiusDp = 24)
+                    view.minimumHeight = dp(48)
                     view.setTextColor(palette.onAccent)
                 }
                 is SeekBar -> {
@@ -730,9 +750,11 @@ class ReadiumEpubActivity : FragmentActivity() {
                     view.progressBackgroundTintList = android.content.res.ColorStateList.valueOf(palette.outline)
                 }
                 is EditText -> {
-                    view.setTextColor(textColor); view.backgroundTintList = android.content.res.ColorStateList.valueOf(palette.accent)
+                    roundedControl(view, background, radiusDp = 16, outline = palette.outline)
+                    view.setTextColor(AppThemePalette.textFor(background))
+                    view.setHintTextColor(androidx.core.graphics.ColorUtils.setAlphaComponent(AppThemePalette.textFor(background), 145))
                 }
-                is Spinner -> view.backgroundTintList = android.content.res.ColorStateList.valueOf(palette.accent)
+                is Spinner -> roundedControl(view, background, radiusDp = 16, outline = palette.outline)
                 is TextView -> view.setTextColor(textColor)
             }
             if (view is ViewGroup) repeat(view.childCount) { recolor(view.getChildAt(it), textColor) }

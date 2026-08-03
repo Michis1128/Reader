@@ -153,6 +153,7 @@ object AppThemePalette {
                 val savedBottom = view.paddingBottom
                 view.background = if (role == SurfaceRole.CARD) rounded(replacement, view.resources.displayMetrics.density) else ColorDrawable(replacement)
                 view.setPadding(savedLeft, savedTop, savedRight, savedBottom)
+                if (role == SurfaceRole.CARD) view.ensureOuterMargins(horizontalDp = 2, verticalDp = 5)
             }
         } else if (view is CompoundButton && view.background != null && view.background !is ColorDrawable) {
             // Las filas seleccionables, como los libros de "Reiniciar libros", son
@@ -175,25 +176,32 @@ object AppThemePalette {
             }
             is Button -> {
                 view.backgroundTintList = null
-                view.setRoundedBackground(colors.accent, radiusDp = 14f)
+                view.setRoundedBackground(colors.accent, radiusDp = 24f)
                 view.setTextColor(colors.onAccent)
-                view.minimumHeight = (44 * view.resources.displayMetrics.density).toInt()
-                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 4)
+                view.minimumHeight = (48 * view.resources.displayMetrics.density).toInt()
+                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
             }
             is EditText -> {
-                view.setTextColor(childText); view.setHintTextColor(ColorUtils.setAlphaComponent(childText, 145))
-                view.backgroundTintList = ColorStateList.valueOf(colors.accent)
+                val inputText = contrast(colors.surface)
+                val savedPadding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+                view.setTextColor(inputText)
+                view.setHintTextColor(ColorUtils.setAlphaComponent(inputText, 145))
+                view.backgroundTintList = null
+                view.background = outlined(colors.surface, colors.outline, view.resources.displayMetrics.density, 16f)
+                view.setPadding(savedPadding[0], savedPadding[1], savedPadding[2], savedPadding[3])
                 view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
             }
             is Spinner -> {
                 val horizontal = (12 * view.resources.displayMetrics.density).toInt()
                 val vertical = (8 * view.resources.displayMetrics.density).toInt()
-                val outsideHorizontal = (10 * view.resources.displayMetrics.density).toInt()
+                val outsideHorizontal = (4 * view.resources.displayMetrics.density).toInt()
                 val outsideVertical = (5 * view.resources.displayMetrics.density).toInt()
                 view.setPadding(horizontal, vertical, horizontal, vertical)
                 view.minimumHeight = (48 * view.resources.displayMetrics.density).toInt()
                 view.backgroundTintList = null
-                view.setRoundedBackground(colors.card, radiusDp = 12f)
+                val savedPadding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+                view.background = outlined(colors.surface, colors.outline, view.resources.displayMetrics.density, 16f)
+                view.setPadding(savedPadding[0], savedPadding[1], savedPadding[2], savedPadding[3])
                 view.isLongClickable = true
                 if (view !is com.michis.reader.ui.LimitedHeightSpinner) view.setOnLongClickListener { true }
                 (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { parameters ->
@@ -213,6 +221,12 @@ object AppThemePalette {
         setColor(color)
         cornerRadius = radiusDp * density
         setStroke(maxOf(1, density.toInt()), ColorUtils.setAlphaComponent(contrast(color), 42))
+    }
+
+    private fun outlined(color: Int, outline: Int, density: Float, radiusDp: Float) = GradientDrawable().apply {
+        setColor(color)
+        cornerRadius = radiusDp * density
+        setStroke(maxOf(1, density.toInt()), outline)
     }
 
     private fun View.setRoundedBackground(color: Int, radiusDp: Float) {

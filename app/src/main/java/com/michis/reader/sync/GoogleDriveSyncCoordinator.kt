@@ -36,5 +36,17 @@ class GoogleDriveSyncCoordinator(private val context: Context) {
         )
     }
 
+    fun synchronizeBook(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        documentIdentifier: Long
+    ) = synchronized(SYNC_LOCK) {
+        IncrementalLibrarySyncCoordinator(context).synchronizeBook(
+            accessToken, accountIdentifier, folder, repository, documentIdentifier
+        )
+    }
+
     companion object { private val SYNC_LOCK = Any() }
 }

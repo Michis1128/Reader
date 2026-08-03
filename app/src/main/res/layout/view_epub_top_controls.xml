@@ -12,6 +12,7 @@
 
     <Button
         android:id="@+id/backButton"
+        style="@style/Widget.MichisReader.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:minWidth="0dp"
@@ -31,6 +32,7 @@
 
     <Button
         android:id="@+id/toolsButton"
+        style="@style/Widget.MichisReader.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:contentDescription="Herramientas"
@@ -49,6 +51,7 @@
 
         <Button
             android:id="@+id/contentsButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:minWidth="0dp"
@@ -60,6 +63,7 @@
 
         <Button
             android:id="@+id/quotesButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing_small"
@@ -72,6 +76,7 @@
 
         <Button
             android:id="@+id/dictionaryButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing_small"
@@ -84,6 +89,7 @@
 
         <Button
             android:id="@+id/bookmarkButton"
+            style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/ui_content_spacing_small"
@@ -99,6 +105,7 @@
 
     <Button
         android:id="@+id/readingSettingsButton"
+        style="@style/Widget.MichisReader.Button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/ui_content_spacing_small"

@@ -75,6 +75,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - `theme/ReadingThemePalette.kt`: temas disponibles para el contenido EPUB.
 - `theme/KvColorPickerOverlay.kt`: único punto de entrada para escoger colores.
 - `ui/ScreenHeader.kt`: encabezado fijo y regreso visible.
+- `ui/SystemBarInsets.kt`: aplicación compartida de barras del sistema y notch en actividades normales; no dupliques listeners de insets por pantalla.
 - `ui/LimitedHeightSpinner.kt`: desplegable temático con altura limitada. Debe conservar constructores compatibles con inflación XML.
 
 ### Google Drive y sincronización
@@ -175,6 +176,8 @@ Esta es la zona de mayor riesgo.
 9. La sincronización manual puede reconciliar el conjunto completo, pero no debe volver a subir EPUB sin cambios.
 10. Respetar la preferencia `solo Wi‑Fi` frente a `datos móviles`; las tareas automáticas deben mantener sus restricciones de WorkManager.
 11. Un reinicio de libro es una mutación sincronizable: progreso a cero y tombstones para citas, marcadores, categorías, entradas y vínculos afectados.
+12. Toda sincronización larga de Drive, incluida la iniciada manualmente, debe encolarse mediante `AutomaticDriveSyncScheduler` y ejecutarse en `GoogleDriveSyncWorker`. Las actividades solo resuelven autorizaciones que requieren UI, encolan y observan el progreso; nunca deben sostener una sincronización con `lifecycleScope`.
+13. La sincronización completa y la sincronización de un libro comparten el bloqueo de `GoogleDriveSyncCoordinator`; no crear rutas paralelas que omitan esa serialización.
     - `last_opened_at = -1` es el marcador interno de reinicio intencional. No lo normalices a cero: cero identifica un libro nuevo y permite restaurar progreso remoto durante una reinstalación.
     - Las fusiones deben ignorar entidades remotas cuya versión sea anterior o igual a un tombstone local.
 12. Antes de cambiar el esquema, aumenta la versión de `ReaderDatabase` y escribe una migración incremental que preserve instalaciones existentes. No dependas solo de `onCreate`.
@@ -187,6 +190,9 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 - El contenido desplazable no debe dibujarse encima de la barra de estado, salvo la experiencia inmersiva intencional del lector.
 - Usa los estilos compartidos de `styles.xml`, dimensiones de `dimens.xml`, layouts reutilizables y View Binding.
 - Mantén separación entre botones; no deben tocarse. Evita controles tan grandes que oculten acciones en teléfonos verticales.
+- Todos los botones XML usan `Widget.MichisReader.Button`; los creados dinámicamente reciben la misma geometría mediante `AppThemePalette`. Su forma es de píldora, con radio de 24 dp y altura mínima de 48 dp.
+- Inputs y spinners usan radio de 16 dp, borde temático y los márgenes compartidos de `dimens.xml`. No agregues controles visualmente aislados con formas o separaciones propias sin una razón funcional.
+- Usa `ui_component_margin_horizontal`, `ui_component_margin_vertical` y las variantes `ui_content_spacing*` para separar componentes; evita nuevos márgenes arbitrarios codificados directamente.
 - Los paneles editables usan tarjetas/rectángulos redondeados con padding interno; títulos de sección quedan fuera cuando así está establecido.
 - Antes de aplicar `AppThemePalette.apply(activity)`, marca fondos especiales con `markBackground`, `markSurface` o `markCard`.
 - Las vistas añadidas después del primer render deben volver a recibir el tema, normalmente con `content.post { AppThemePalette.apply(activity) }`.
