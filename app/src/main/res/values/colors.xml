@@ -7,4 +7,6 @@
     <color name="ui_on_accent_fallback">#FFFFFFFF</color>
     <color name="ui_text_fallback">#FF191B21</color>
     <color name="ui_outline_fallback">#2A191B21</color>
+    <color name="ic_launcher_background">#D8B4FE</color>
+    <color name="splash_background">#F4EEFF</color>
 </resources>

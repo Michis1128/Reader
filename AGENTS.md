@@ -200,6 +200,7 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 - No fijes fondos crema, blancos o negros en Kotlin/XML si deben responder al tema. Usa la paleta y contraste dinámico.
 - El texto debe obtener contraste suficiente sobre cada fondo. No derives el color del texto suponiendo que todos los temas son claros.
 - Para colores personalizados usa solamente `KvColorPickerOverlay.show(...)`. No reincorpores sliders RGB/HSV ni otro selector paralelo.
+- La identidad visual usa `ic_michis_reader_mark`, el icono adaptativo `ic_launcher` y su capa `monochrome`. Conserva las variantes clara/nocturna y la capa monocromática para iconos temáticos; no reemplaces el launcher por un PNG plano con bordes blancos.
 - Los spinners usan `LimitedHeightSpinner`: 3–4 opciones visibles, scroll para el resto, fondo temático, selección por toque y sin apertura por pulsación prolongada.
 - La transición futura de textos visibles a `strings.xml` está especificada en `cambios_futuro.md`. Si el usuario dice “mandarlo para el futuro”, documenta la propuesta allí.
 
