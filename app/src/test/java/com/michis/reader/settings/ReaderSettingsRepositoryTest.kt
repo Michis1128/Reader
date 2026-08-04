@@ -51,4 +51,30 @@ class ReaderSettingsRepositoryTest {
 
         assertEquals(ReaderSettingsRepository.DEFAULT_SCREEN_TIMEOUT_MINUTES, settings.screenTimeoutMinutes)
     }
+
+    @Test
+    fun newInstallUsesReducedPageMarginsByDefault() {
+        assertEquals(PageMarginMode.REDUCED, settings.pageMarginMode)
+        assertEquals(0.5, settings.pageMarginMode.horizontalFactor, 0.0)
+    }
+
+    @Test
+    fun legacyPageMarginChoiceIsPreserved() {
+        settings.preferences.edit().putBoolean("page_margins", true).commit()
+        assertEquals(PageMarginMode.NORMAL, settings.pageMarginMode)
+
+        settings.preferences.edit().putBoolean("page_margins", false).commit()
+        assertEquals(PageMarginMode.CUSTOM, settings.pageMarginMode)
+        assertEquals(0f, settings.customPageMarginLeftDp, 0f)
+        assertEquals(0f, settings.customPageMarginRightDp, 0f)
+    }
+
+    @Test
+    fun customPageMarginsAreLimitedToSupportedRange() {
+        settings.customPageMarginTopDp = 200f
+        settings.customPageMarginBottomDp = -20f
+
+        assertEquals(ReaderSettingsRepository.MAXIMUM_CUSTOM_PAGE_MARGIN_DP, settings.customPageMarginTopDp, 0f)
+        assertEquals(ReaderSettingsRepository.MINIMUM_CUSTOM_PAGE_MARGIN_DP, settings.customPageMarginBottomDp, 0f)
+    }
 }

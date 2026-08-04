@@ -122,6 +122,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Las preferencias de lectura son globales entre libros: tema, fuente, tamaño, grosor, interlineado, alineación, márgenes, orientación/paginación y opciones relacionadas.
 - El cambio rápido alterna únicamente entre los dos temas configurados; no cambia tipografía ni dimensiones.
 - El contenido inicia en la parte superior. La alineación horizontal sigue siendo configurable.
+- El ancho útil del contenido se ajusta a los márgenes de la hoja y no debe reducirse junto con la tipografía. Se anula el `maxLineLength` basado en `rem` de Readium tanto para una página como para el pliego de dos páginas. El perfil predeterminado es `REDUCED` (la mitad del margen normal); `LARGE`, `NORMAL` y `REDUCED` conservan el `pageGutter` de Readium, mientras `CUSTOM` permite superior, inferior, izquierdo y derecho independientes.
 - La estimación de página depende de la maquetación actual; no tratarla como número fijo del archivo EPUB.
 - No eliminar páginas en blanco válidas del EPUB mediante heurísticas destructivas.
 
