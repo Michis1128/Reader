@@ -311,7 +311,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 initialPreferences = currentPreferences,
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
                     override fun onPageLoaded() {
-                        applyTopAnchoredContent()
+                        applyReaderDocumentLayout()
                     }
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
@@ -358,7 +358,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         applyMenuColors(colors)
         return EpubPreferences(
             fontSize = size, publisherStyles = false,
-            pageMargins = if (preferences.getBoolean("page_margins", true)) 1.0 else 0.0,
+            pageMargins = readerSettings.pageMarginMode.horizontalFactor,
             scroll = preferences.getBoolean("continuous_scroll", false),
             lineHeight = readerSettings.lineHeight.toDouble(),
             fontWeight = preferences.getFloat("font_weight", 1.0f).toDouble(),
@@ -380,14 +380,23 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun submit(changes: EpubPreferences) {
         currentPreferences += changes
-        if (::navigator.isInitialized) navigator.submitPreferences(currentPreferences)
+        if (::navigator.isInitialized) {
+            navigator.submitPreferences(currentPreferences)
+            rootLayout.postDelayed(::applyReaderDocumentLayout, 80)
+            rootLayout.postDelayed(::applyReaderDocumentLayout, 240)
+        }
     }
 
-    private fun applyTopAnchoredContent() {
+    private fun applyReaderDocumentLayout() {
         if (!::navigator.isInitialized) {
-            rootLayout.postDelayed(::applyTopAnchoredContent, 120)
+            rootLayout.postDelayed(::applyReaderDocumentLayout, 120)
             return
         }
+        val marginMode = readerSettings.pageMarginMode
+        val customMarginTop = readerSettings.customPageMarginTopDp
+        val customMarginRight = readerSettings.customPageMarginRightDp
+        val customMarginBottom = readerSettings.customPageMarginBottomDp
+        val customMarginLeft = readerSettings.customPageMarginLeftDp
         lifecycleScope.launch {
             navigator.evaluateJavascript(
                 """
@@ -397,6 +406,32 @@ class ReadiumEpubActivity : FragmentActivity() {
                     element.style.setProperty('justify-content', 'flex-start', 'important');
                     element.style.setProperty('align-content', 'start', 'important');
                   });
+                  const root = document.documentElement;
+                  const body = document.body;
+                  if (root && body) {
+                    const readiumPageGutter = getComputedStyle(root)
+                      .getPropertyValue('--RS__pageGutter')
+                      .trim();
+                    if (readiumPageGutter) {
+                      root.style.setProperty(
+                        '--RS__maxLineLength',
+                        'var(--RS__viewportWidth, 100vw)',
+                        'important'
+                      );
+                      body.style.setProperty('width', '100%', 'important');
+                      body.style.setProperty('max-width', '100%', 'important');
+                      body.style.setProperty('box-sizing', 'border-box', 'important');
+                      if ('${marginMode.preferenceValue}' === 'custom') {
+                        body.style.setProperty(
+                          'padding',
+                          '${customMarginTop}px ${customMarginRight}px ${customMarginBottom}px ${customMarginLeft}px',
+                          'important'
+                        );
+                      } else {
+                        body.style.removeProperty('padding');
+                      }
+                    }
+                  }
                 })();
                 """.trimIndent()
             )

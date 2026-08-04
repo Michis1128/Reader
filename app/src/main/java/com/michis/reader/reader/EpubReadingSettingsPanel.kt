@@ -96,10 +96,6 @@ class EpubReadingSettingsPanel(
                         spread = if (checked) Spread.ALWAYS else Spread.NEVER
                     ))
                 })
-                addView(toggle("Activar márgenes de página", preferences.getBoolean(KEY_PAGE_MARGINS, true)) { checked ->
-                    preferences.edit().putBoolean(KEY_PAGE_MARGINS, checked).apply()
-                    submitPreferences(EpubPreferences(pageMargins = if (checked) 1.0 else 0.0))
-                })
             })
             addView(family("Pantalla") {
                 addView(label("Orientación"))
@@ -111,6 +107,42 @@ class EpubReadingSettingsPanel(
                         else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     }
                 })
+                addView(label("Márgenes de página"))
+                val marginModes = PageMarginMode.entries
+                val customMarginControls = LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    visibility = if (settings.pageMarginMode == PageMarginMode.CUSTOM) View.VISIBLE else View.GONE
+                    addView(label("Superior (dp)"))
+                    addView(numberStepper(settings.customPageMarginTopDp.toDouble(), 0.0, 96.0, 1.0) { value ->
+                        settings.customPageMarginTopDp = value.toFloat()
+                        submitPreferences(EpubPreferences(pageMargins = PageMarginMode.CUSTOM.horizontalFactor))
+                    })
+                    addView(label("Inferior (dp)"))
+                    addView(numberStepper(settings.customPageMarginBottomDp.toDouble(), 0.0, 96.0, 1.0) { value ->
+                        settings.customPageMarginBottomDp = value.toFloat()
+                        submitPreferences(EpubPreferences(pageMargins = PageMarginMode.CUSTOM.horizontalFactor))
+                    })
+                    addView(label("Izquierdo (dp)"))
+                    addView(numberStepper(settings.customPageMarginLeftDp.toDouble(), 0.0, 96.0, 1.0) { value ->
+                        settings.customPageMarginLeftDp = value.toFloat()
+                        submitPreferences(EpubPreferences(pageMargins = PageMarginMode.CUSTOM.horizontalFactor))
+                    })
+                    addView(label("Derecho (dp)"))
+                    addView(numberStepper(settings.customPageMarginRightDp.toDouble(), 0.0, 96.0, 1.0) { value ->
+                        settings.customPageMarginRightDp = value.toFloat()
+                        submitPreferences(EpubPreferences(pageMargins = PageMarginMode.CUSTOM.horizontalFactor))
+                    })
+                }
+                addView(spinner(
+                    marginModes.map(PageMarginMode::displayName).toTypedArray(),
+                    marginModes.indexOf(settings.pageMarginMode)
+                ) { index ->
+                    val selectedMode = marginModes[index]
+                    settings.pageMarginMode = selectedMode
+                    customMarginControls.visibility = if (selectedMode == PageMarginMode.CUSTOM) View.VISIBLE else View.GONE
+                    submitPreferences(EpubPreferences(pageMargins = selectedMode.horizontalFactor))
+                })
+                addView(customMarginControls)
             })
             addView(family("Aplicación") {
                 addView(actionButton("Configuración general") {
@@ -190,7 +222,6 @@ class EpubReadingSettingsPanel(
         const val KEY_CONTINUOUS_SCROLL = "continuous_scroll"
         const val KEY_PAGE_ANIMATIONS = "page_turn_animations"
         const val KEY_TWO_PAGES_LANDSCAPE = "two_pages_landscape"
-        const val KEY_PAGE_MARGINS = "page_margins"
         const val KEY_ORIENTATION = "reader_orientation"
     }
 }

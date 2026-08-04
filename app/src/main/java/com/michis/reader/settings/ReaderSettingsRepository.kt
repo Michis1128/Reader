@@ -5,6 +5,13 @@ import com.michis.reader.theme.ReadingThemePalette
 import android.content.Context
 import android.content.SharedPreferences
 
+enum class PageMarginMode(val preferenceValue: String, val displayName: String, val horizontalFactor: Double) {
+    LARGE("large", "Grandes", 1.5),
+    NORMAL("normal", "Normales", 1.0),
+    REDUCED("reduced", "Reducidos", 0.5),
+    CUSTOM("custom", "Personalizados", 0.0)
+}
+
 /** Punto unico de acceso a las preferencias globales de lectura y apariencia. */
 class ReaderSettingsRepository private constructor(context: Context) {
     val preferences: SharedPreferences = context.applicationContext.getSharedPreferences(
@@ -41,6 +48,47 @@ class ReaderSettingsRepository private constructor(context: Context) {
         get() = preferences.getString(KEY_MENU_COLOR_MODE, DEFAULT_MENU_COLOR_MODE) ?: DEFAULT_MENU_COLOR_MODE
         set(value) = preferences.edit().putString(KEY_MENU_COLOR_MODE, value).apply()
 
+    var pageMarginMode: PageMarginMode
+        get() {
+            val storedValue = preferences.getString(KEY_PAGE_MARGIN_MODE, null)
+            return PageMarginMode.entries.firstOrNull { it.preferenceValue == storedValue }
+                ?: if (preferences.contains(LEGACY_KEY_PAGE_MARGINS)) {
+                    if (preferences.getBoolean(LEGACY_KEY_PAGE_MARGINS, true)) PageMarginMode.NORMAL
+                    else PageMarginMode.CUSTOM
+                } else PageMarginMode.REDUCED
+        }
+        set(value) = preferences.edit().putString(KEY_PAGE_MARGIN_MODE, value.preferenceValue).apply()
+
+    var customPageMarginTopDp: Float
+        get() = customPageMargin(KEY_CUSTOM_PAGE_MARGIN_TOP_DP)
+        set(value) = saveCustomPageMargin(KEY_CUSTOM_PAGE_MARGIN_TOP_DP, value)
+
+    var customPageMarginBottomDp: Float
+        get() = customPageMargin(KEY_CUSTOM_PAGE_MARGIN_BOTTOM_DP)
+        set(value) = saveCustomPageMargin(KEY_CUSTOM_PAGE_MARGIN_BOTTOM_DP, value)
+
+    var customPageMarginLeftDp: Float
+        get() = customPageMargin(KEY_CUSTOM_PAGE_MARGIN_LEFT_DP)
+        set(value) = saveCustomPageMargin(KEY_CUSTOM_PAGE_MARGIN_LEFT_DP, value)
+
+    var customPageMarginRightDp: Float
+        get() = customPageMargin(KEY_CUSTOM_PAGE_MARGIN_RIGHT_DP)
+        set(value) = saveCustomPageMargin(KEY_CUSTOM_PAGE_MARGIN_RIGHT_DP, value)
+
+    private fun customPageMargin(key: String): Float {
+        val legacyDisabled = preferences.contains(LEGACY_KEY_PAGE_MARGINS) &&
+            !preferences.getBoolean(LEGACY_KEY_PAGE_MARGINS, true)
+        val defaultValue = if (legacyDisabled) 0f else DEFAULT_CUSTOM_PAGE_MARGIN_DP
+        return preferences.getFloat(key, defaultValue).coerceIn(MINIMUM_CUSTOM_PAGE_MARGIN_DP, MAXIMUM_CUSTOM_PAGE_MARGIN_DP)
+    }
+
+    private fun saveCustomPageMargin(key: String, value: Float) {
+        preferences.edit().putFloat(
+            key,
+            value.coerceIn(MINIMUM_CUSTOM_PAGE_MARGIN_DP, MAXIMUM_CUSTOM_PAGE_MARGIN_DP)
+        ).apply()
+    }
+
     companion object {
         const val PREFERENCES_NAME = "reading_preferences"
         const val KEY_THEME = "theme"
@@ -53,6 +101,11 @@ class ReaderSettingsRepository private constructor(context: Context) {
         const val KEY_QUOTE_DEFAULT_COLOR = "quote_default_color"
         const val KEY_DICTIONARY_HIGHLIGHT_COLOR = "dictionary_highlight_color"
         const val KEY_BOOKMARK_COLOR = "bookmark_color"
+        const val KEY_PAGE_MARGIN_MODE = "page_margin_mode"
+        const val KEY_CUSTOM_PAGE_MARGIN_TOP_DP = "custom_page_margin_top_dp"
+        const val KEY_CUSTOM_PAGE_MARGIN_BOTTOM_DP = "custom_page_margin_bottom_dp"
+        const val KEY_CUSTOM_PAGE_MARGIN_LEFT_DP = "custom_page_margin_left_dp"
+        const val KEY_CUSTOM_PAGE_MARGIN_RIGHT_DP = "custom_page_margin_right_dp"
 
         const val DEFAULT_THEME = "Sepia"
         const val DEFAULT_FONT_SIZE_DP = 19f
@@ -66,10 +119,14 @@ class ReaderSettingsRepository private constructor(context: Context) {
         const val DEFAULT_BOOKMARK_COLOR = "#FF8D6E63"
         const val MINIMUM_FONT_SIZE_DP = 8f
         const val MAXIMUM_FONT_SIZE_DP = 72f
+        const val DEFAULT_CUSTOM_PAGE_MARGIN_DP = 16f
+        const val MINIMUM_CUSTOM_PAGE_MARGIN_DP = 0f
+        const val MAXIMUM_CUSTOM_PAGE_MARGIN_DP = 96f
         val SCREEN_TIMEOUT_OPTIONS = setOf(2, 3, 5, 10, 15)
 
         private const val LEGACY_KEY_FONT_SIZE = "font_size"
         private const val LEGACY_KEY_LINE_SPACING = "line_spacing"
+        private const val LEGACY_KEY_PAGE_MARGINS = "page_margins"
 
         @Volatile
         private var sharedInstance: ReaderSettingsRepository? = null
