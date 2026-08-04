@@ -48,6 +48,49 @@ class ReaderSettingsRepository private constructor(context: Context) {
         get() = preferences.getString(KEY_MENU_COLOR_MODE, DEFAULT_MENU_COLOR_MODE) ?: DEFAULT_MENU_COLOR_MODE
         set(value) = preferences.edit().putString(KEY_MENU_COLOR_MODE, value).apply()
 
+    var fontWeight: Float
+        get() = preferences.getFloat(KEY_FONT_WEIGHT, DEFAULT_FONT_WEIGHT).coerceIn(0.5f, 2f)
+        set(value) = preferences.edit().putFloat(KEY_FONT_WEIGHT, value.coerceIn(0.5f, 2f)).apply()
+
+    var continuousScroll: Boolean
+        get() = preferences.getBoolean(KEY_CONTINUOUS_SCROLL, false)
+        set(value) = preferences.edit().putBoolean(KEY_CONTINUOUS_SCROLL, value).apply()
+
+    var pageTurnAnimations: Boolean
+        get() = preferences.getBoolean(KEY_PAGE_TURN_ANIMATIONS, true)
+        set(value) = preferences.edit().putBoolean(KEY_PAGE_TURN_ANIMATIONS, value).apply()
+
+    fun twoPagesLandscape(defaultValue: Boolean): Boolean =
+        preferences.getBoolean(KEY_TWO_PAGES_LANDSCAPE, defaultValue)
+
+    fun setTwoPagesLandscape(value: Boolean) {
+        preferences.edit().putBoolean(KEY_TWO_PAGES_LANDSCAPE, value).apply()
+    }
+
+    var fontFamilyIndex: Int
+        get() = preferences.getInt(KEY_FONT_FAMILY, 0).coerceAtLeast(0)
+        set(value) = preferences.edit().putInt(KEY_FONT_FAMILY, value.coerceAtLeast(0)).apply()
+
+    var readerOrientation: Int
+        get() = preferences.getInt(KEY_READER_ORIENTATION, 0).coerceIn(0, 2)
+        set(value) = preferences.edit().putInt(KEY_READER_ORIENTATION, value.coerceIn(0, 2)).apply()
+
+    var cornerBookmarkEnabled: Boolean
+        get() = preferences.getBoolean(KEY_CORNER_BOOKMARK_ENABLED, true)
+        set(value) = preferences.edit().putBoolean(KEY_CORNER_BOOKMARK_ENABLED, value).apply()
+
+    fun quickMode(index: Int): String {
+        require(index in 0..1)
+        val defaultValue = if (index == 0) "Día" else "Noche"
+        return preferences.getString(if (index == 0) KEY_QUICK_MODE_ONE else KEY_QUICK_MODE_TWO, defaultValue)
+            ?: defaultValue
+    }
+
+    fun setQuickMode(index: Int, themeName: String) {
+        require(index in 0..1)
+        preferences.edit().putString(if (index == 0) KEY_QUICK_MODE_ONE else KEY_QUICK_MODE_TWO, themeName).apply()
+    }
+
     var pageMarginMode: PageMarginMode
         get() {
             val storedValue = preferences.getString(KEY_PAGE_MARGIN_MODE, null)
@@ -98,6 +141,15 @@ class ReaderSettingsRepository private constructor(context: Context) {
         const val KEY_SCREEN_TIMEOUT_MINUTES = "reader_screen_timeout_minutes"
         const val KEY_MENU_COLOR_MODE = "menu_color_mode"
         const val KEY_MENU_CUSTOM_COLOR = "menu_custom_color"
+        const val KEY_FONT_WEIGHT = "font_weight"
+        const val KEY_CONTINUOUS_SCROLL = "continuous_scroll"
+        const val KEY_PAGE_TURN_ANIMATIONS = "page_turn_animations"
+        const val KEY_TWO_PAGES_LANDSCAPE = "two_pages_landscape"
+        const val KEY_FONT_FAMILY = "font_family"
+        const val KEY_READER_ORIENTATION = "reader_orientation"
+        const val KEY_CORNER_BOOKMARK_ENABLED = "corner_bookmark_enabled"
+        const val KEY_QUICK_MODE_ONE = "quick_mode_1"
+        const val KEY_QUICK_MODE_TWO = "quick_mode_2"
         const val KEY_QUOTE_DEFAULT_COLOR = "quote_default_color"
         const val KEY_DICTIONARY_HIGHLIGHT_COLOR = "dictionary_highlight_color"
         const val KEY_BOOKMARK_COLOR = "bookmark_color"
@@ -110,6 +162,7 @@ class ReaderSettingsRepository private constructor(context: Context) {
         const val DEFAULT_THEME = "Sepia"
         const val DEFAULT_FONT_SIZE_DP = 19f
         const val DEFAULT_LINE_HEIGHT = 1.35f
+        const val DEFAULT_FONT_WEIGHT = 1f
         const val DEFAULT_TEXT_ALIGNMENT = 0
         const val DEFAULT_SCREEN_TIMEOUT_MINUTES = 5
         const val DEFAULT_MENU_COLOR_MODE = "theme"

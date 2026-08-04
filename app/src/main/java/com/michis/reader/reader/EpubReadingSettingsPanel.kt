@@ -38,7 +38,6 @@ class EpubReadingSettingsPanel(
     private lateinit var familyContainer: LinearLayout
 
     fun create(): View {
-        val preferences = settings.preferences
         val panelBinding = PanelEpubSettingsBinding.inflate(activity.layoutInflater)
         panelBinding.panelContainer.tag = ReaderMenuTags.SURFACE
         panelBinding.closeButton.setOnClickListener { closePanel() }
@@ -53,10 +52,10 @@ class EpubReadingSettingsPanel(
                 addView(label("Tipo de fuente"))
                 addView(actionButton("Seleccionar fuente…") { selectFont() })
                 addView(label("Grosor de fuente"))
-                val currentWeight = preferences.getFloat(KEY_FONT_WEIGHT, 1f).coerceIn(0.5f, 2f)
+                val currentWeight = settings.fontWeight
                 addView(slider(100, (((currentWeight - 0.5f) / 1.5f) * 100).toInt()) { progress ->
                     val value = 0.5 + progress / 100.0 * 1.5
-                    preferences.edit().putFloat(KEY_FONT_WEIGHT, value.toFloat()).apply()
+                    settings.fontWeight = value.toFloat()
                     submitPreferences(EpubPreferences(fontWeight = value))
                 })
                 addView(label("Interlineado"))
@@ -73,24 +72,23 @@ class EpubReadingSettingsPanel(
                 addView(label("Tema"))
                 addView(spinner(ReadingThemePalette.names, ReadingThemePalette.names.indexOf(settings.theme).coerceAtLeast(0), selectTheme))
                 addView(label("Cambio de página"))
-                addView(spinner(arrayOf("Paginado", "Desplazamiento continuo"), if (preferences.getBoolean(KEY_CONTINUOUS_SCROLL, false)) 1 else 0) { index ->
-                    preferences.edit().putBoolean(KEY_CONTINUOUS_SCROLL, index == 1).apply()
+                addView(spinner(arrayOf("Paginado", "Desplazamiento continuo"), if (settings.continuousScroll) 1 else 0) { index ->
+                    settings.continuousScroll = index == 1
                     submitPreferences(EpubPreferences(scroll = index == 1))
                 })
-                addView(toggle("Animar cambios de página", preferences.getBoolean(KEY_PAGE_ANIMATIONS, true)) { checked ->
-                    preferences.edit().putBoolean(KEY_PAGE_ANIMATIONS, checked).apply()
-                    if (checked && preferences.getBoolean(KEY_CONTINUOUS_SCROLL, false)) {
+                addView(toggle("Animar cambios de página", settings.pageTurnAnimations) { checked ->
+                    settings.pageTurnAnimations = checked
+                    if (checked && settings.continuousScroll) {
                         Toast.makeText(activity, "La animación se muestra en modo Paginado", Toast.LENGTH_LONG).show()
                     }
                 })
                 addView(toggle(
                     "Mostrar dos páginas en horizontal",
-                    preferences.getBoolean(
-                        KEY_TWO_PAGES_LANDSCAPE,
+                    settings.twoPagesLandscape(
                         activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
                     )
                 ) { checked ->
-                    preferences.edit().putBoolean(KEY_TWO_PAGES_LANDSCAPE, checked).apply()
+                    settings.setTwoPagesLandscape(checked)
                     submitPreferences(EpubPreferences(
                         columnCount = if (checked) ColumnCount.TWO else ColumnCount.ONE,
                         spread = if (checked) Spread.ALWAYS else Spread.NEVER
@@ -99,8 +97,8 @@ class EpubReadingSettingsPanel(
             })
             addView(family("Pantalla") {
                 addView(label("Orientación"))
-                addView(spinner(arrayOf("Automática", "Vertical", "Horizontal"), preferences.getInt(KEY_ORIENTATION, 0)) { index ->
-                    preferences.edit().putInt(KEY_ORIENTATION, index).apply()
+                addView(spinner(arrayOf("Automática", "Vertical", "Horizontal"), settings.readerOrientation) { index ->
+                    settings.readerOrientation = index
                     activity.requestedOrientation = when (index) {
                         1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                         2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -217,13 +215,6 @@ class EpubReadingSettingsPanel(
     private fun format(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
 
-    private companion object {
-        const val KEY_FONT_WEIGHT = "font_weight"
-        const val KEY_CONTINUOUS_SCROLL = "continuous_scroll"
-        const val KEY_PAGE_ANIMATIONS = "page_turn_animations"
-        const val KEY_TWO_PAGES_LANDSCAPE = "two_pages_landscape"
-        const val KEY_ORIENTATION = "reader_orientation"
-    }
 }
 
 object ReaderMenuTags {

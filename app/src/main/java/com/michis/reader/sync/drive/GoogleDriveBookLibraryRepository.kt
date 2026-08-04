@@ -7,8 +7,6 @@ import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -19,6 +17,7 @@ data class DriveLibrarySyncResult(val discoveredFiles: Int, val downloadedFiles:
 /** Descarga una carpeta elegida de Drive a una copia privada disponible sin conexión. */
 class GoogleDriveBookLibraryRepository(private val context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val httpClient = GoogleDriveHttpClient()
 
     fun selectedFolder(accountIdentifier: String): DriveLibraryFolder? {
         val suffix = accountIdentifier.lowercase().hashCode()
@@ -193,7 +192,7 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
                 URLEncoder.encode(it.key, StandardCharsets.UTF_8.name()) + "=" +
                     URLEncoder.encode(it.value, StandardCharsets.UTF_8.name())
             }
-            val response = jsonRequest(url, accessToken)
+            val response = httpClient.json(url, accessToken)
             val changes = response.optJSONArray("changes") ?: JSONArray()
             repeat(changes.length()) { index ->
                 val change = changes.optJSONObject(index) ?: return@repeat
@@ -254,13 +253,13 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
         return downloaded
     }
 
-    private fun getStartPageToken(accessToken: String): String = jsonRequest(
+    private fun getStartPageToken(accessToken: String): String = httpClient.json(
         "$DRIVE_CHANGES_ENDPOINT/startPageToken",
         accessToken
     ).getString("startPageToken")
 
     private fun fileMetadata(accessToken: String, identifier: String): JSONObject =
-        jsonRequest("$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,modifiedTime,size,trashed", accessToken)
+        httpClient.json("$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,modifiedTime,size,trashed", accessToken)
 
     private fun isEpub(item: JSONObject): Boolean =
         item.optString("mimeType").equals(EPUB_MIME_TYPE, ignoreCase = true) ||
@@ -279,7 +278,7 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
                 URLEncoder.encode(it.key, StandardCharsets.UTF_8.name()) + "=" +
                     URLEncoder.encode(it.value, StandardCharsets.UTF_8.name())
             }
-            val response = jsonRequest(url, accessToken)
+            val response = httpClient.json(url, accessToken)
             val files = response.optJSONArray("files") ?: JSONArray()
             repeat(files.length()) { results += files.getJSONObject(it) }
             pageToken = response.optString("nextPageToken").takeIf { it.isNotBlank() }
@@ -287,29 +286,8 @@ class GoogleDriveBookLibraryRepository(private val context: Context) {
         return results
     }
 
-    private fun download(accessToken: String, identifier: String, output: java.io.OutputStream) {
-        val connection = URL("$DRIVE_FILES_ENDPOINT/$identifier?alt=media").openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = 20_000; connection.readTimeout = 120_000
-            connection.setRequestProperty("Authorization", "Bearer $accessToken")
-            val status = connection.responseCode
-            if (status !in 200..299) throw IllegalStateException("Drive respondió $status al descargar un libro EPUB")
-            connection.inputStream.buffered().use { it.copyTo(output) }
-        } finally { connection.disconnect() }
-    }
-
-    private fun jsonRequest(url: String, accessToken: String): JSONObject {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = 15_000; connection.readTimeout = 30_000
-            connection.setRequestProperty("Authorization", "Bearer $accessToken")
-            val status = connection.responseCode
-            val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) throw IllegalStateException("Drive respondió $status")
-            return JSONObject(text)
-        } finally { connection.disconnect() }
-    }
+    private fun download(accessToken: String, identifier: String, output: java.io.OutputStream) =
+        httpClient.download("$DRIVE_FILES_ENDPOINT/$identifier?alt=media", accessToken, output)
 
     private fun safeFileName(name: String): String = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { "libro.epub" }
 

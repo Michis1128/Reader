@@ -158,8 +158,8 @@ internal class LibraryViewRenderer(
 
     private fun detailedDocumentCard(document: LibraryDocument): View {
         val binding = ItemLibraryDocumentDetailedBinding.inflate(activity.layoutInflater, documentList, false)
-        val quoteCount = database.annotations(document.identifier).count { it.kind == "cita" }
-        val dictionaryStatus = if (database.effectiveDictionaryEntries(document.identifier).isEmpty()) "Sin diccionario" else "Diccionario activo"
+        val quoteCount = database.annotationCount(document.identifier, "cita")
+        val dictionaryStatus = if (database.hasEffectiveDictionaryEntries(document.identifier)) "Diccionario activo" else "Sin diccionario"
         binding.documentTitle.text = document.title
         binding.documentDetails.text = "${document.format} · Calculando páginas… · $quoteCount citas · $dictionaryStatus"
         EpubPageEstimator.estimate(activity, document) { pages ->

@@ -40,10 +40,15 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 
 ### Lector EPUB
 
-- `reader/ReadiumEpubActivity.kt`: ciclo de vida del lector, Readium, navegación, selección contextual, pantalla completa, controles, progreso, S Pen y apertura de menús.
+- `reader/ReadiumEpubActivity.kt`: coordinador del ciclo de vida, apertura de la publicación Readium, controles y conexiones entre los componentes especializados del lector.
 - `reader/EpubReadingSettingsPanel.kt`: contenido y acciones del menú Aa.
 - `reader/EpubContentsPanel.kt`: árbol jerárquico del índice.
 - `reader/EpubDecorationController.kt`: resaltados interactivos de diccionarios y citas.
+- `reader/EpubAppearanceController.kt`: preferencias Readium, temas, tipografía y ajustes CSS de página; no dupliques esta lógica en la Activity.
+- `reader/EpubSearchController.kt`: búsqueda interna, resultados, decoraciones y registro de saltos producidos por búsqueda.
+- `reader/ReaderSessionController.kt`: restauración de sesión, persistencia final y sincronización por libro al salir o minimizar.
+- `reader/ReaderWindowController.kt`: pantalla inmersiva, barras del sistema, notch y tiempo de pantalla activa.
+- `reader/DictionaryLocatorCache.kt`: caché descartable e incremental de búsquedas Readium para términos de diccionario.
 - `reader/EpubPageEstimator.kt`: cálculo aproximado de páginas relativo a la presentación.
 
 ### Biblioteca
@@ -156,6 +161,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 
 - Las acciones aéreas solo deben ejecutarse con el botón del S Pen presionado.
 - `SpenRemoteController` necesita un contexto de Activity; no sustituirlo por `applicationContext`.
+- `SpenReaderActionController` resuelve teclas y preferencias hacia acciones del lector; no vuelvas a codificar el mapeo dentro de `ReadiumEpubActivity`.
 - Mantener el `intent-filter`, `meta-data` y `res/xml/spen_remote_actions.xml` del manifest.
 - Los mapeos son configurables y deben poder restaurarse a sus valores predeterminados.
 

@@ -5,12 +5,8 @@ import com.michis.reader.data.*
 import com.michis.reader.sync.drive.*
 
 data class FullSyncResult(
-    val firstBackup: Boolean,
     val documentCount: Int,
-    val downloadedDocumentCount: Int,
-    val readingMerge: ReadingMergeResult,
-    val dictionaryMerge: DictionaryMergeResult,
-    val deletionMerge: DeletionMergeResult
+    val downloadedDocumentCount: Int
 )
 
 /** Coordina la detección de EPUB modificados y los estados incrementales por libro. */

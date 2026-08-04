@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -217,6 +218,40 @@ class ReaderDatabaseTest {
         assertEquals(setOf(linkedIdentifier), database.linkedDocuments(ownerIdentifier))
         assertEquals("Ávalon", database.effectiveDictionaryEntries(linkedIdentifier).single().term)
     }
+
+    @Test
+    fun newDatabaseDoesNotCreateLegacyVocabularyTable() {
+        database.writableDatabase
+
+        assertFalse(tableExists(database.readableDatabase, "vocabulary"))
+    }
+
+    @Test
+    fun migrationFromVersionEightRemovesOnlyLegacyVocabularyTable() {
+        database.close()
+        context.deleteDatabase(DATABASE_NAME)
+        context.openOrCreateDatabase(DATABASE_NAME, Context.MODE_PRIVATE, null).use { legacyDatabase ->
+            legacyDatabase.execSQL(
+                """CREATE TABLE vocabulary (
+                    word TEXT PRIMARY KEY, context TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+                    order_position INTEGER NOT NULL DEFAULT 0)"""
+            )
+            legacyDatabase.execSQL("CREATE TABLE preservation_marker (value TEXT NOT NULL)")
+            legacyDatabase.version = 8
+        }
+        database = ReaderDatabase(context)
+
+        database.writableDatabase
+
+        assertFalse(tableExists(database.readableDatabase, "vocabulary"))
+        assertTrue(tableExists(database.readableDatabase, "preservation_marker"))
+    }
+
+    private fun tableExists(database: android.database.sqlite.SQLiteDatabase, tableName: String): Boolean =
+        database.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            arrayOf(tableName)
+        ).use { cursor -> cursor.moveToFirst() }
 
     private companion object {
         const val DATABASE_NAME = "reader_library.db"

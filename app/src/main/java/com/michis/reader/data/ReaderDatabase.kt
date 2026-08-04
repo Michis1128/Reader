@@ -24,10 +24,6 @@ data class SavedAnnotation(
     val location: Int, val pageNumber: Int, val createdAt: Long, val orderPosition: Int
 )
 
-data class VocabularyEntry(
-    val word: String, val context: String, val createdAt: Long, val orderPosition: Int
-)
-
 data class DictionaryCategory(val identifier: Long, val documentIdentifier: Long, val name: String)
 data class DictionaryEntry(
     val identifier: Long, val categoryIdentifier: Long, val documentIdentifier: Long,
@@ -54,7 +50,7 @@ data class PendingSyncDeletion(val entityType: String, val syncIdentifier: Strin
 data class DeletionMergeResult(val appliedDeletions: Int, val ignoredLocalNewer: Int, val alreadyAbsent: Int)
 data class BookResetResult(val annotationsDeleted: Int, val dictionaryEntriesDeleted: Int, val dictionaryCategoriesDeleted: Int)
 
-class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 8) {
+class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 9) {
     private val libraryDocuments by lazy { LibraryDocumentRepository(this) }
     private val annotationsRepository by lazy { AnnotationRepository(this) }
     private val dictionaries by lazy { DictionaryRepository(this) }
@@ -83,9 +79,6 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             sync_id TEXT NOT NULL UNIQUE, updated_at INTEGER NOT NULL,
             FOREIGN KEY(document_identifier) REFERENCES documents(identifier) ON DELETE CASCADE)""")
         database.execSQL("CREATE INDEX annotations_document_index ON annotations(document_identifier)")
-        database.execSQL("""CREATE TABLE vocabulary (
-            word TEXT PRIMARY KEY, context TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
-            order_position INTEGER NOT NULL DEFAULT 0)""")
         createDictionaryTables(database)
         createDictionaryLinksTable(database)
         createSyncTombstonesTable(database)
@@ -112,6 +105,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
                 database.execSQL("ALTER TABLE documents ADD COLUMN library_folder_remote_id TEXT")
             createLibraryFoldersTable(database)
         }
+        if (oldVersion < 9) database.execSQL("DROP TABLE IF EXISTS vocabulary")
     }
 
     private fun createLibraryFoldersTable(database: SQLiteDatabase) {
@@ -234,20 +228,14 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun annotations(documentIdentifier: Long? = null) = annotationsRepository.annotations(documentIdentifier)
 
+    fun annotationCount(documentIdentifier: Long, kind: String) = annotationsRepository.count(documentIdentifier, kind)
+
     fun deleteAnnotation(identifier: Long) = synchronization.deleteEntity("annotations", "annotation", identifier)
     fun updateQuote(identifier: Long, note: String, color: Int) = annotationsRepository.updateQuote(identifier, note, color)
 
     fun bookmarkAt(documentIdentifier: Long, location: Int) = annotationsRepository.bookmarkAt(documentIdentifier, location)
 
     fun moveAnnotation(identifier: Long, direction: Int) = annotationsRepository.moveAnnotation(identifier, direction)
-
-    fun saveVocabulary(word: String, context: String = "") = annotationsRepository.saveVocabulary(word, context)
-
-    fun vocabulary() = annotationsRepository.vocabulary()
-
-    fun deleteVocabulary(word: String) = annotationsRepository.deleteVocabulary(word)
-
-    fun moveVocabulary(word: String, direction: Int) = annotationsRepository.moveVocabulary(word, direction)
 
     fun dictionaryCategories(documentIdentifier: Long) = dictionaries.categories(documentIdentifier)
 
@@ -265,6 +253,8 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
         dictionaries.effectiveOwnerIdentifiers(documentIdentifier)
 
     fun effectiveDictionaryEntries(documentIdentifier: Long) = dictionaries.effectiveEntries(documentIdentifier)
+
+    fun hasEffectiveDictionaryEntries(documentIdentifier: Long) = dictionaries.hasEffectiveEntries(documentIdentifier)
 
     fun linkedDocuments(ownerDocumentIdentifier: Long) = dictionaries.linkedDocuments(ownerDocumentIdentifier)
 

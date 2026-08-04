@@ -69,8 +69,8 @@ class SettingsActivity : ComponentActivity() {
         addView(settingsSection("Lectura y modos rápidos") {
             addView(description("Con los controles ocultos, toca la esquina superior izquierda para alternar únicamente entre estos dos temas."))
             addView(settingsField("Tema global", globalThemeSpinner()))
-            addView(settingsField("Modo rápido 1 (predeterminado: Día)", modeSpinner("quick_mode_1", "Día")))
-            addView(settingsField("Modo rápido 2 (predeterminado: Noche)", modeSpinner("quick_mode_2", "Noche")))
+            addView(settingsField("Modo rápido 1 (predeterminado: Día)", modeSpinner(0)))
+            addView(settingsField("Modo rápido 2 (predeterminado: Noche)", modeSpinner(1)))
             addView(settingsField("Tiempo de pantalla activa", screenTimeoutSpinner()))
         })
         addView(settingsSection("Apariencia de menús") {
@@ -95,8 +95,8 @@ class SettingsActivity : ComponentActivity() {
             addView(description("Personaliza cómo se identifican los puntos guardados dentro de cada libro."))
             addView(settingsField("Color de marcador", hexColorEditor("bookmark_color", "#FF8D6E63")))
             addView(settingsToggle("Permitir marcador tocando la esquina") {
-                isChecked = readerSettings.preferences.getBoolean("corner_bookmark_enabled", true)
-                setOnCheckedChangeListener { _, checked -> readerSettings.preferences.edit().putBoolean("corner_bookmark_enabled", checked).apply() }
+                isChecked = readerSettings.cornerBookmarkEnabled
+                setOnCheckedChangeListener { _, checked -> readerSettings.cornerBookmarkEnabled = checked }
             })
         })
         addView(settingsSection("Comandos aéreos del S Pen") {
@@ -131,13 +131,12 @@ class SettingsActivity : ComponentActivity() {
 
 
 
-    private fun modeSpinner(key: String, default: String) = LimitedHeightSpinner(this).apply {
-        val preferences = readerSettings.preferences
+    private fun modeSpinner(index: Int) = LimitedHeightSpinner(this).apply {
         adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, readingModes)
-        setSelection(readingModes.indexOf(preferences.getString(key, default)).coerceAtLeast(0))
+        setSelection(readingModes.indexOf(readerSettings.quickMode(index)).coerceAtLeast(0))
         onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                preferences.edit().putString(key, readingModes[position]).apply()
+                readerSettings.setQuickMode(index, readingModes[position])
             }
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
