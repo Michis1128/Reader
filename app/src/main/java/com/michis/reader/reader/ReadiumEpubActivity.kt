@@ -4,7 +4,6 @@ package com.michis.reader.reader
 
 import com.michis.reader.R
 import com.michis.reader.annotations.*
-import com.michis.reader.app.ReaderResumeState
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityReadiumEpubBinding
 import com.michis.reader.databinding.ViewEpubBottomControlsBinding
@@ -13,7 +12,6 @@ import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
-import com.michis.reader.sync.AutomaticDriveSyncScheduler
 import com.michis.reader.theme.*
 
 import android.app.AlertDialog
@@ -21,14 +19,11 @@ import android.app.SearchManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.InputFilter
 import android.text.InputType
 import android.util.TypedValue
@@ -44,14 +39,9 @@ import kotlinx.coroutines.launch
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
-import org.readium.r2.navigator.preferences.*
-import org.readium.r2.navigator.preferences.Color as ReadiumColor
 import org.readium.r2.shared.publication.services.locateProgression
 import org.readium.r2.shared.publication.services.positions
-import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.publication.Locator
-import org.readium.r2.shared.publication.services.search.SearchService
-import org.readium.r2.shared.publication.services.search.search
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
 import org.readium.r2.shared.util.http.DefaultHttpClient
@@ -62,6 +52,7 @@ import org.readium.r2.streamer.parser.DefaultPublicationParser
 class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var screenBinding: ActivityReadiumEpubBinding
     private val readerSettings by lazy { ReaderSettingsRepository.get(this) }
+    private val readerWindow by lazy { ReaderWindowController(this) }
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
     private lateinit var rootLayout: FrameLayout
@@ -71,6 +62,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var contentsPanel: View
     private lateinit var searchPanel: View
     private lateinit var searchPanelBinding: ViewEpubSearchPanelBinding
+    private lateinit var searchController: EpubSearchController
     private lateinit var panelCoordinator: ReaderPanelCoordinator
     private lateinit var contentsController: EpubContentsPanel
     private lateinit var progressSlider: SeekBar
@@ -82,7 +74,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var clearJumpHistoryButton: Button
     private lateinit var jumpForwardButton: Button
     private lateinit var navigator: EpubNavigatorFragment
-    private var currentPreferences = EpubPreferences(publisherStyles = false)
+    private lateinit var appearanceController: EpubAppearanceController
     private var controlsAreVisible = true
     private var userIsDraggingProgress = false
     private var touchStartedX = 0f
@@ -94,14 +86,10 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var lastBookmarkActionAt = 0L
     private val navigationHistory = ReaderNavigationHistory()
     private var sliderJumpOriginPage: Int? = null
-    private val inactivityHandler = Handler(Looper.getMainLooper())
     private lateinit var spenRemoteController: SpenRemoteController
+    private lateinit var spenActionController: SpenReaderActionController
+    private var sessionController: ReaderSessionController? = null
     private var pagePositions = emptyList<org.readium.r2.shared.publication.Locator>()
-    private var publication: Publication? = null
-    private var searchResults = emptyList<Locator>()
-    private var currentSearchResultIndex = -1
-    private var searchRequestToken = 0
-    private var progressPersistedSinceLastResume = false
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -113,14 +101,34 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(null)
-        configureEdgeToEdgeWindow()
+        readerWindow.configureEdgeToEdge()
         database = ReaderDatabase.getInstance(this)
-        spenRemoteController = SpenRemoteController(this, ::executeSpenGesture)
         document = database.findDocument(intent.getLongExtra("document_identifier", -1)) ?: run { finish(); return }
-        decorationController = EpubDecorationController(
-            database,
-            document.identifier,
+        sessionController = ReaderSessionController(this, database, document)
+        spenActionController = SpenReaderActionController(
             readerSettings,
+            SpenReaderActionController.Actions(
+                nextPage = { navigateOnePage(1) },
+                previousPage = { navigateOnePage(-1) },
+                toggleControls = ::toggleControls,
+                toggleBookmark = ::saveCurrentBookmark,
+                increaseText = { changeFontSizeFromSpen(1f) },
+                decreaseText = { changeFontSizeFromSpen(-1f) },
+                toggleQuickTheme = {
+                    activeQuickMode = 1 - activeQuickMode
+                    appearanceController.applyQuickMode(activeQuickMode)
+                },
+                addSelectionToDictionary = { useSelectedTextFromSpen(addToDictionary = true) },
+                addSelectionAsQuote = { useSelectedTextFromSpen(addToDictionary = false) },
+                interactionCompleted = ::configureReaderScreenTimeout
+            )
+        )
+        spenRemoteController = SpenRemoteController(this, ::executeSpenGesture)
+        decorationController = EpubDecorationController(
+            context = this,
+            database = database,
+            documentIdentifier = document.identifier,
+            settings = readerSettings,
             openDictionaryEntry = { entryIdentifier ->
                 launchReaderMenu(Intent(this, DictionaryActivity::class.java)
                     .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
@@ -132,7 +140,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         )
         setContentView(buildScreen())
-        applyInitialVisualTheme()
+        appearanceController.applyInitialTheme()
         configureReaderScreenTimeout()
         openWithReadium()
     }
@@ -140,6 +148,14 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun buildScreen(): View {
         screenBinding = ActivityReadiumEpubBinding.inflate(layoutInflater)
         rootLayout = screenBinding.rootLayout
+        appearanceController = EpubAppearanceController(
+            activity = this,
+            settings = readerSettings,
+            scope = lifecycleScope,
+            readerRoot = rootLayout,
+            navigator = { if (::navigator.isInitialized) navigator else null },
+            applyMenuColors = ::applyMenuColors
+        )
         rootLayout.setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
         topControls = configureTopControls(screenBinding.screenTopControls)
         bottomControls = configureBottomControls(screenBinding.screenBottomControls)
@@ -171,7 +187,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 lifecycleScope.launch { decorationController.clearSearchResults() }
             }
         }
-        applySafeSystemBarPadding(rootLayout)
+        readerWindow.applySystemBarPadding(rootLayout, topControls, bottomControls, settingsPanel, contentsPanel)
         return rootLayout
     }
 
@@ -260,22 +276,32 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun buildSettingsPanel(): View = EpubReadingSettingsPanel(
         activity = this,
         settings = readerSettings,
-        submitPreferences = ::submit,
-        selectTheme = ::applyReadingTheme,
-        selectFont = ::showFontSelectionDialog,
+        submitPreferences = appearanceController::submit,
+        selectTheme = appearanceController::applyReadingTheme,
+        selectFont = appearanceController::showFontSelection,
         closePanel = { settingsPanel.visibility = View.GONE }
     ).create()
 
     private fun buildSearchPanel(): View {
         searchPanelBinding = ViewEpubSearchPanelBinding.inflate(layoutInflater)
+        searchController = EpubSearchController(
+            binding = searchPanelBinding,
+            scope = lifecycleScope,
+            decorations = decorationController,
+            navigationHistory = navigationHistory,
+            currentPageIndex = ::currentPageIndex,
+            animationsEnabled = ::pageAnimationsEnabled,
+            navigate = { locator, animated -> navigator.go(locator, animated = animated) },
+            scheduleDelayed = { action, delay -> rootLayout.postDelayed(action, delay) }
+        )
         searchPanelBinding.searchPanel.tag = MENU_CARD_TAG
-        searchPanelBinding.searchButton.setOnClickListener { performBookSearch() }
+        searchPanelBinding.searchButton.setOnClickListener { searchController.performSearch() }
         searchPanelBinding.searchInput.setOnEditorActionListener { _, _, _ ->
-            performBookSearch()
+            searchController.performSearch()
             true
         }
-        searchPanelBinding.previousResultButton.setOnClickListener { moveBetweenSearchResults(-1) }
-        searchPanelBinding.nextResultButton.setOnClickListener { moveBetweenSearchResults(1) }
+        searchPanelBinding.previousResultButton.setOnClickListener { searchController.move(-1) }
+        searchPanelBinding.nextResultButton.setOnClickListener { searchController.move(1) }
         searchPanelBinding.closeSearchButton.setOnClickListener { closeSearchPanel() }
         return searchPanelBinding.root
     }
@@ -305,19 +331,19 @@ class ReadiumEpubActivity : FragmentActivity() {
             val url = Uri.parse(document.uri).toAbsoluteUrl() ?: run { showError("Ubicación no válida"); return@launch }
             val asset = assetRetriever.retrieve(url).getOrElse { showError(it.toString()); return@launch }
             val opened = opener.open(asset, allowUserInteraction = false).getOrElse { showError(it.toString()); return@launch }
-            publication = opened
+            searchController.attachPublication(opened)
             pagePositions = opened.positions()
             val savedLocation = database.readerLocation(document.identifier)
             val initialLocator = pagePositions.firstOrNull { it.locations.position == savedLocation }
                 ?: opened.locateProgression(document.progress.toDouble().coerceIn(0.0, 1.0))
-            currentPreferences = loadInitialPreferences()
+            val initialPreferences = appearanceController.initialPreferences()
             val factory = EpubNavigatorFactory(opened)
             supportFragmentManager.fragmentFactory = factory.createFragmentFactory(
                 initialLocator = initialLocator,
-                initialPreferences = currentPreferences,
+                initialPreferences = initialPreferences,
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
                     override fun onPageLoaded() {
-                        applyReaderDocumentLayout()
+                        appearanceController.applyDocumentLayout()
                     }
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
@@ -344,105 +370,6 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         }
     }
-
-    private fun loadInitialPreferences(): EpubPreferences {
-        val size = readerSettings.fontSizeDp / 16.0
-        val themeIndex = ReadingThemePalette.names.indexOf(readerSettings.theme).coerceAtLeast(0)
-        val colors = ReadingThemePalette.colors(themeIndex)
-        val alignment = readerSettings.textAlignment
-        val twoPages = readerSettings.twoPagesLandscape(
-            resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE)
-        val fontFamilies = arrayOf(FontFamily.SANS_SERIF, FontFamily.SERIF, FontFamily.CURSIVE, FontFamily.MONOSPACE,
-            FontFamily.OPEN_DYSLEXIC, FontFamily.ACCESSIBLE_DFA, FontFamily.IA_WRITER_DUOSPACE)
-        val fontFamily = fontFamilies[readerSettings.fontFamilyIndex.coerceIn(fontFamilies.indices)]
-        requestedOrientation = when (readerSettings.readerOrientation) {
-            1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-        applyMenuColors(colors)
-        return EpubPreferences(
-            fontSize = size, publisherStyles = false,
-            pageMargins = readerSettings.pageMarginMode.horizontalFactor,
-            scroll = readerSettings.continuousScroll,
-            lineHeight = readerSettings.lineHeight.toDouble(),
-            fontWeight = readerSettings.fontWeight.toDouble(),
-            fontFamily = fontFamily,
-            textAlign = arrayOf(TextAlign.JUSTIFY, TextAlign.START, TextAlign.CENTER, TextAlign.END)[alignment],
-            columnCount = if (twoPages) ColumnCount.TWO else ColumnCount.ONE,
-            spread = if (twoPages) Spread.ALWAYS else Spread.NEVER,
-            theme = when (themeIndex) { 1 -> Theme.DARK; 2 -> Theme.SEPIA; else -> Theme.LIGHT },
-            backgroundColor = ReadiumColor(colors.first), textColor = ReadiumColor(colors.second)
-        )
-    }
-
-    private fun applyInitialVisualTheme() {
-        val selectedTheme = readerSettings.theme
-        val colors = ReadingThemePalette.colors(selectedTheme)
-        rootLayout.setBackgroundColor(colors.first)
-        applyMenuColors(colors)
-    }
-
-    private fun submit(changes: EpubPreferences) {
-        currentPreferences += changes
-        if (::navigator.isInitialized) {
-            navigator.submitPreferences(currentPreferences)
-            rootLayout.postDelayed(::applyReaderDocumentLayout, 80)
-            rootLayout.postDelayed(::applyReaderDocumentLayout, 240)
-        }
-    }
-
-    private fun applyReaderDocumentLayout() {
-        if (!::navigator.isInitialized) {
-            rootLayout.postDelayed(::applyReaderDocumentLayout, 120)
-            return
-        }
-        val marginMode = readerSettings.pageMarginMode
-        val customMarginTop = readerSettings.customPageMarginTopDp
-        val customMarginRight = readerSettings.customPageMarginRightDp
-        val customMarginBottom = readerSettings.customPageMarginBottomDp
-        val customMarginLeft = readerSettings.customPageMarginLeftDp
-        lifecycleScope.launch {
-            navigator.evaluateJavascript(
-                """
-                (() => {
-                  const elements = [document.documentElement, document.body].filter(Boolean);
-                  elements.forEach(element => {
-                    element.style.setProperty('justify-content', 'flex-start', 'important');
-                    element.style.setProperty('align-content', 'start', 'important');
-                  });
-                  const root = document.documentElement;
-                  const body = document.body;
-                  if (root && body) {
-                    const readiumPageGutter = getComputedStyle(root)
-                      .getPropertyValue('--RS__pageGutter')
-                      .trim();
-                    if (readiumPageGutter) {
-                      root.style.setProperty(
-                        '--RS__maxLineLength',
-                        'var(--RS__viewportWidth, 100vw)',
-                        'important'
-                      );
-                      body.style.setProperty('width', '100%', 'important');
-                      body.style.setProperty('max-width', '100%', 'important');
-                      body.style.setProperty('box-sizing', 'border-box', 'important');
-                      if ('${marginMode.preferenceValue}' === 'custom') {
-                        body.style.setProperty(
-                          'padding',
-                          '${customMarginTop}px ${customMarginRight}px ${customMarginBottom}px ${customMarginLeft}px',
-                          'important'
-                        );
-                      } else {
-                        body.style.removeProperty('padding');
-                      }
-                    }
-                  }
-                })();
-                """.trimIndent()
-            )
-        }
-    }
-
 
     private fun selectionActions() = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
@@ -486,14 +413,13 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        progressPersistedSinceLastResume = false
-        if (::document.isInitialized) ReaderResumeState.markReaderActive(this, document.identifier)
+        sessionController?.onResume()
         configureReaderScreenTimeout()
-        spenRemoteController.connect()
+        if (::spenRemoteController.isInitialized) spenRemoteController.connect()
         if (::topControls.isInitialized && ::bottomControls.isInitialized && ::settingsPanel.isInitialized) {
             val selectedTheme = readerSettings.theme
             val themeIndex = ReadingThemePalette.names.indexOf(selectedTheme).coerceAtLeast(0)
-            if (::navigator.isInitialized) applyReadingTheme(themeIndex)
+            if (::navigator.isInitialized) appearanceController.applyReadingTheme(themeIndex)
             else {
                 rootLayout.setBackgroundColor(ReadingThemePalette.colors(selectedTheme).first)
                 applyMenuColors(ReadingThemePalette.colors(selectedTheme))
@@ -514,7 +440,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     private fun openBookQuotes() {
-        ReaderResumeState.markReaderExited(this)
+        sessionController?.markReaderMenuOpened()
         quotesLauncher.launch(Intent(this, BookQuotesActivity::class.java)
             .putExtra(BookQuotesActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
             .putExtra(BookQuotesActivity.EXTRA_RETURN_TO_READER, true))
@@ -527,62 +453,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         val originPage = currentPageIndex()
         recordPageJump(originPage, targetPage)
         navigateToPage(targetPage)
-    }
-
-    private fun performBookSearch() {
-        val query = searchPanelBinding.searchInput.text.toString().trim()
-        val opened = publication
-        if (query.isBlank() || opened == null) {
-            searchPanelBinding.searchResultLabel.text = "Escribe un texto para buscar"
-            return
-        }
-        val initialPageBeforeSearch = currentPageIndex()
-        val requestToken = ++searchRequestToken
-        searchPanelBinding.searchResultLabel.text = "Buscando…"
-        searchPanelBinding.previousResultButton.isEnabled = false
-        searchPanelBinding.nextResultButton.isEnabled = false
-        lifecycleScope.launch {
-            val matches = mutableListOf<Locator>()
-            val iterator = opened.search(
-                query,
-                SearchService.Options(caseSensitive = false, wholeWord = false, exact = true)
-            )
-            iterator?.forEach { result -> matches += result.locators }
-            iterator?.close()
-            if (requestToken != searchRequestToken) return@launch
-            searchResults = matches
-            currentSearchResultIndex = if (matches.isEmpty()) -1 else 0
-            decorationController.showSearchResults(matches, currentSearchResultIndex)
-            updateSearchControls()
-            if (matches.isNotEmpty()) navigateToSearchResult(0, initialPageBeforeSearch)
-        }
-    }
-
-    private fun moveBetweenSearchResults(direction: Int) {
-        if (searchResults.isEmpty()) return
-        val target = (currentSearchResultIndex + direction).coerceIn(searchResults.indices)
-        if (target == currentSearchResultIndex) return
-        currentSearchResultIndex = target
-        lifecycleScope.launch { decorationController.showSearchResults(searchResults, target) }
-        updateSearchControls()
-        navigateToSearchResult(target)
-    }
-
-    private fun navigateToSearchResult(index: Int, originPage: Int = currentPageIndex()) {
-        val locator = searchResults.getOrNull(index) ?: return
-        val jumpToken = navigationHistory.beginPending(PendingJumpSource.SEARCH, originPage)
-        navigator.go(locator, animated = pageAnimationsEnabled())
-        rootLayout.postDelayed({
-            navigationHistory.cancelPending(PendingJumpSource.SEARCH, jumpToken)
-        }, 2_000L)
-    }
-
-    private fun updateSearchControls() {
-        val count = searchResults.size
-        searchPanelBinding.searchResultLabel.text = if (count == 0) "Sin coincidencias" else
-            "Coincidencia ${currentSearchResultIndex + 1} de $count"
-        searchPanelBinding.previousResultButton.isEnabled = currentSearchResultIndex > 0
-        searchPanelBinding.nextResultButton.isEnabled = currentSearchResultIndex in 0 until count - 1
     }
 
     private fun toggleSearchPanel() {
@@ -679,17 +549,7 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!::navigator.isInitialized) return super.onKeyDown(keyCode, event)
-        val gesture = when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> SpenControlPreferences.click
-            KeyEvent.KEYCODE_B -> SpenControlPreferences.doubleClick
-            KeyEvent.KEYCODE_PAGE_DOWN -> SpenControlPreferences.swipeLeft
-            KeyEvent.KEYCODE_PAGE_UP -> SpenControlPreferences.swipeRight
-            KeyEvent.KEYCODE_DPAD_UP -> SpenControlPreferences.swipeUp
-            KeyEvent.KEYCODE_DPAD_DOWN -> SpenControlPreferences.swipeDown
-            KeyEvent.KEYCODE_PLUS -> SpenControlPreferences.circleClockwise
-            KeyEvent.KEYCODE_MINUS -> SpenControlPreferences.circleCounterclockwise
-            else -> return super.onKeyDown(keyCode, event)
-        }
+        val gesture = spenActionController.gestureForKeyCode(keyCode) ?: return super.onKeyDown(keyCode, event)
         if (spenRemoteController.isConnected) return true
         executeSpenGesture(gesture)
         return true
@@ -697,24 +557,7 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun executeSpenGesture(gesture: SpenControlPreferences.Gesture) {
         if (!::navigator.isInitialized) return
-        val currentPage = ((navigator.currentLocator.value.locations.position ?: 1) - 1)
-            .coerceIn(0, (pagePositions.size - 1).coerceAtLeast(0))
-        val action = readerSettings.preferences.getString(gesture.preferenceKey, gesture.defaultAction)
-        when (action) {
-            SpenControlPreferences.NONE -> Unit
-            SpenControlPreferences.NEXT -> navigateOnePage(1)
-            SpenControlPreferences.PREVIOUS -> navigateOnePage(-1)
-            SpenControlPreferences.TOGGLE_CONTROLS -> toggleControls()
-            SpenControlPreferences.BOOKMARK -> saveCurrentBookmark()
-            SpenControlPreferences.LARGER_TEXT -> changeFontSizeFromSpen(1f)
-            SpenControlPreferences.SMALLER_TEXT -> changeFontSizeFromSpen(-1f)
-            SpenControlPreferences.QUICK_THEME -> {
-                activeQuickMode = 1 - activeQuickMode; applyQuickMode(activeQuickMode)
-            }
-            SpenControlPreferences.ADD_DICTIONARY -> useSelectedTextFromSpen(addToDictionary = true)
-            SpenControlPreferences.ADD_QUOTE -> useSelectedTextFromSpen(addToDictionary = false)
-        }
-        configureReaderScreenTimeout()
+        spenActionController.execute(gesture)
     }
 
     private fun useSelectedTextFromSpen(addToDictionary: Boolean) {
@@ -740,7 +583,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             ReaderSettingsRepository.MAXIMUM_FONT_SIZE_DP
         )
         readerSettings.fontSizeDp = size
-        submit(EpubPreferences(fontSize = size / 16.0))
+        appearanceController.submit(EpubPreferences(fontSize = size / 16.0))
         Toast.makeText(this, "Texto: ${size.toInt()} dp", Toast.LENGTH_SHORT).show()
     }
 
@@ -765,36 +608,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         }
     }
 
-    private fun showFontSelectionDialog() {
-        val names = arrayOf("Sans Serif", "Serif", "Cursiva", "Monoespaciada", "OpenDyslexic", "Accessible DfA", "iA Writer Duospace")
-        val fonts = arrayOf(FontFamily.SANS_SERIF, FontFamily.SERIF, FontFamily.CURSIVE, FontFamily.MONOSPACE,
-            FontFamily.OPEN_DYSLEXIC, FontFamily.ACCESSIBLE_DFA, FontFamily.IA_WRITER_DUOSPACE)
-        AlertDialog.Builder(this).setTitle("Tipo de fuente").setItems(names) { _, index ->
-            readerSettings.fontFamilyIndex = index
-            submit(EpubPreferences(fontFamily = fonts[index]))
-        }.show()
-    }
-
-    private fun applyQuickMode(index: Int) {
-        val themeName = readerSettings.quickMode(index)
-        applyReadingTheme(ReadingThemePalette.names.indexOf(themeName).coerceAtLeast(0))
-        navigator.clearSelection()
-        Toast.makeText(this, themeName, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun applyReadingTheme(index: Int) {
-        val colors = ReadingThemePalette.colors(index)
-        val baseTheme = when (index) { 1 -> Theme.DARK; 2 -> Theme.SEPIA; else -> Theme.LIGHT }
-        submit(EpubPreferences(
-            theme = baseTheme,
-            backgroundColor = ReadiumColor(colors.first),
-            textColor = ReadiumColor(colors.second)
-        ))
-        readerSettings.theme = ReadingThemePalette.names[index]
-        rootLayout.setBackgroundColor(colors.first)
-        applyMenuColors(colors)
-    }
-
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (::compactProgressSlider.isInitialized && compactProgressSlider.visibility == View.VISIBLE) {
             val sliderBounds = Rect()
@@ -811,7 +624,9 @@ class ReadiumEpubActivity : FragmentActivity() {
             MotionEvent.ACTION_UP -> {
                 if (quickModeGestureIsActive) {
                     quickModeGestureIsActive = false
-                    activeQuickMode = 1 - activeQuickMode; applyQuickMode(activeQuickMode); return true
+                    activeQuickMode = 1 - activeQuickMode
+                    appearanceController.applyQuickMode(activeQuickMode)
+                    return true
                 }
                 val movement = kotlin.math.hypot(event.x - touchStartedX, event.y - touchStartedY)
                 val shortTap = movement < dp(12) && event.eventTime - touchStartedAt < 350
@@ -847,10 +662,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     private fun configureReaderScreenTimeout() {
-        inactivityHandler.removeCallbacksAndMessages(null)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        val minutes = readerSettings.screenTimeoutMinutes
-        inactivityHandler.postDelayed({ window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }, minutes * 60_000L)
+        readerWindow.resetScreenTimeout(readerSettings.screenTimeoutMinutes)
     }
 
     private fun applyMenuColors(themeColors: Pair<Int, Int>) {
@@ -860,27 +672,12 @@ class ReadiumEpubActivity : FragmentActivity() {
             ReadingThemePalette.names[themeIndex],
             listOf(topControls, bottomControls, compactProgressSlider, settingsPanel, contentsPanel, searchPanel)
         )
-        updateReaderSystemBarContrast(palette.surface)
-    }
-
-    private fun updateReaderSystemBarContrast(background: Int) {
-        val useDarkIcons = androidx.core.graphics.ColorUtils.calculateLuminance(background) >= .45
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            window.insetsController?.setSystemBarsAppearance(if (useDarkIcons) flags else 0, flags)
-        } else {
-            @Suppress("DEPRECATION")
-            val flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = if (useDarkIcons) window.decorView.systemUiVisibility or flags
-            else window.decorView.systemUiVisibility and flags.inv()
-        }
+        readerWindow.updateSystemBarContrast(palette.surface)
     }
 
     override fun onPause() {
-        spenRemoteController.disconnect()
-        inactivityHandler.removeCallbacksAndMessages(null); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (::spenRemoteController.isInitialized) spenRemoteController.disconnect()
+        readerWindow.stopScreenTimeout()
         super.onPause()
     }
 
@@ -888,33 +685,19 @@ class ReadiumEpubActivity : FragmentActivity() {
         // onStop is also invoked when the user minimizes the app. Persisting and
         // enqueueing here lets WorkManager finish the book-only synchronization
         // even if Android subsequently destroys the reader process.
-        if (!isChangingConfigurations) persistProgressAndScheduleBookSync()
+        sessionController?.onStop(currentLocatorOrNull(), isChangingConfigurations)
         super.onStop()
     }
 
     override fun finish() {
-        persistProgressAndScheduleBookSync()
-        ReaderResumeState.markReaderExited(this)
+        sessionController?.onFinish(currentLocatorOrNull())
         super.finish()
     }
 
-    private fun persistProgressAndScheduleBookSync() {
-        if (progressPersistedSinceLastResume) return
-        if (!::navigator.isInitialized || !::document.isInitialized || !::database.isInitialized) return
-        val locator = navigator.currentLocator.value
-        locator.locations.totalProgression?.let { progression ->
-            database.updateProgress(
-                document.identifier,
-                locator.locations.position ?: 0,
-                progression.toFloat()
-            )
-        }
-        AutomaticDriveSyncScheduler(this).enqueueBookSync(document.identifier)
-        progressPersistedSinceLastResume = true
-    }
+    private fun currentLocatorOrNull(): Locator? = if (::navigator.isInitialized) navigator.currentLocator.value else null
 
     private fun launchReaderMenu(intent: Intent) {
-        ReaderResumeState.markReaderExited(this)
+        sessionController?.markReaderMenuOpened()
         startActivity(intent)
     }
 
@@ -935,7 +718,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         bottomControls.visibility = if (controlsAreVisible) View.VISIBLE else View.INVISIBLE
         compactProgressSlider.visibility = if (controlsAreVisible) View.GONE else View.VISIBLE
         if (controlsAreVisible) updatePageJumpActions()
-        setSystemBarsVisible(controlsAreVisible)
+        readerWindow.setSystemBarsVisible(controlsAreVisible)
     }
 
     private fun toggleSettingsPanel() {
@@ -949,31 +732,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         panelCoordinator.toggle(ReaderPanel.CONTENTS)
     }
 
-
-    @Suppress("DEPRECATION")
-    private fun configureEdgeToEdgeWindow() {
-        window.statusBarColor = Color.TRANSPARENT; window.navigationBarColor = Color.TRANSPARENT
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) window.setDecorFitsSystemWindows(false)
-    }
-    private fun setSystemBarsVisible(visible: Boolean) {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) window.insetsController?.let {
-            it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            if (visible) it.show(WindowInsets.Type.systemBars()) else it.hide(WindowInsets.Type.systemBars())
-        }
-    }
-    private fun applySafeSystemBarPadding(view: View) {
-        val originalTopPadding = topControls.paddingTop
-        val originalBottomPadding = bottomControls.paddingBottom
-        view.setOnApplyWindowInsetsListener { target, insets ->
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                topControls.setPadding(topControls.paddingLeft, originalTopPadding + bars.top, topControls.paddingRight, topControls.paddingBottom)
-                bottomControls.setPadding(bottomControls.paddingLeft, bottomControls.paddingTop, bottomControls.paddingRight, originalBottomPadding + bars.bottom)
-                settingsPanel.setPadding(settingsPanel.paddingLeft, bars.top, settingsPanel.paddingRight, bars.bottom)
-                contentsPanel.setPadding(contentsPanel.paddingLeft, bars.top, contentsPanel.paddingRight, bars.bottom)
-            }; insets
-        }
-    }
     private fun showError(message: String) { Toast.makeText(this, "No se pudo abrir el EPUB: $message", Toast.LENGTH_LONG).show(); finish() }
     private fun dp(value: Int) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
 

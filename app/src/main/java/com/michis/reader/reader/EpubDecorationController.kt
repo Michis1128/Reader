@@ -5,8 +5,13 @@ package com.michis.reader.reader
 import com.michis.reader.data.*
 import com.michis.reader.settings.ReaderSettingsRepository
 
+import android.content.Context
 import android.graphics.Color
 import android.os.SystemClock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.yield
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -17,6 +22,7 @@ import org.readium.r2.shared.publication.services.search.search
 
 /** Mantiene resaltados de diccionario y citas separados del ciclo de navegacion EPUB. */
 class EpubDecorationController(
+    context: Context,
     private val database: ReaderDatabase,
     private val documentIdentifier: Long,
     private val settings: ReaderSettingsRepository,
@@ -28,6 +34,10 @@ class EpubDecorationController(
 
     private var publication: Publication? = null
     private var navigator: EpubNavigatorFragment? = null
+    private val dictionaryLocatorCache = DictionaryLocatorCache(context.applicationContext)
+    private val dictionaryRefreshMutex = Mutex()
+    private val dictionaryLocatorsByTerm = mutableMapOf<String, List<Locator>>()
+    private var dictionaryCacheLoaded = false
 
     private val dictionaryListener = object : DecorableNavigator.Listener {
         override fun onDecorationActivated(event: DecorableNavigator.OnActivatedEvent): Boolean {
@@ -54,6 +64,10 @@ class EpubDecorationController(
     }
 
     fun attach(publication: Publication, navigator: EpubNavigatorFragment) {
+        if (this.publication !== publication) {
+            dictionaryLocatorsByTerm.clear()
+            dictionaryCacheLoaded = false
+        }
         this.publication = publication
         this.navigator = navigator
         navigator.addDecorationListener(DICTIONARY_GROUP, dictionaryListener)
@@ -90,32 +104,63 @@ class EpubDecorationController(
     }
 
     private suspend fun refreshDictionaryHighlights() {
-        val opened = publication ?: return
-        val targetNavigator = navigator ?: return
-        val colorText = settings.preferences.getString(
-            ReaderSettingsRepository.KEY_DICTIONARY_HIGHLIGHT_COLOR,
-            ReaderSettingsRepository.DEFAULT_DICTIONARY_HIGHLIGHT_COLOR
-        )
-        val tint = runCatching { Color.parseColor(colorText) }.getOrDefault(0x665A7D9A)
-        val decorations = mutableListOf<Decoration>()
-        database.effectiveDictionaryEntries(documentIdentifier).forEach { entry ->
-            val iterator = opened.search(
-                entry.term,
-                SearchService.Options(caseSensitive = false, wholeWord = true, exact = true)
-            ) ?: return@forEach
-            iterator.forEach { result ->
-                result.locators.forEach { locator ->
-                    decorations += Decoration(
-                        id = "dictionary-${entry.identifier}-${decorations.size}",
-                        locator = locator,
-                        style = Decoration.Style.Highlight(tint, true),
-                        extras = mapOf(ENTRY_IDENTIFIER_EXTRA to entry.identifier)
-                    )
+        dictionaryRefreshMutex.lock()
+        try {
+            val opened = publication ?: return
+            val targetNavigator = navigator ?: return
+            val document = database.findDocument(documentIdentifier) ?: return
+            if (!dictionaryCacheLoaded) {
+                dictionaryLocatorsByTerm.putAll(dictionaryLocatorCache.load(document))
+                dictionaryCacheLoaded = true
+            }
+            val entries = database.effectiveDictionaryEntries(documentIdentifier)
+            val plan = DictionaryDecorationSearchPlan.create(
+                entries.map { it.identifier to it.term },
+                dictionaryLocatorsByTerm.keys
+            )
+            val activeKeys = plan.activeTerms.mapTo(mutableSetOf(), DictionarySearchTerm::cacheKey)
+            var cacheChanged = dictionaryLocatorsByTerm.keys.retainAll(activeKeys)
+            plan.activeTerms.filter { it.cacheKey in plan.missingCacheKeys }.forEach { searchTerm ->
+                currentCoroutineContext().ensureActive()
+                val locators = mutableListOf<Locator>()
+                val iterator = opened.search(
+                    searchTerm.term,
+                    SearchService.Options(caseSensitive = false, wholeWord = true, exact = true)
+                )
+                if (iterator != null) {
+                    try {
+                        iterator.forEach { result -> locators += result.locators }
+                    } finally {
+                        iterator.close()
+                    }
+                }
+                dictionaryLocatorsByTerm[searchTerm.cacheKey] = locators
+                cacheChanged = true
+                yield()
+            }
+            if (cacheChanged) dictionaryLocatorCache.save(document, dictionaryLocatorsByTerm)
+
+            val colorText = settings.preferences.getString(
+                ReaderSettingsRepository.KEY_DICTIONARY_HIGHLIGHT_COLOR,
+                ReaderSettingsRepository.DEFAULT_DICTIONARY_HIGHLIGHT_COLOR
+            )
+            val tint = runCatching { Color.parseColor(colorText) }.getOrDefault(0x665A7D9A)
+            val decorations = buildList {
+                plan.activeTerms.forEach { searchTerm ->
+                    dictionaryLocatorsByTerm[searchTerm.cacheKey].orEmpty().forEachIndexed { index, locator ->
+                        add(Decoration(
+                            id = "dictionary-${searchTerm.entryIdentifier}-$index",
+                            locator = locator,
+                            style = Decoration.Style.Highlight(tint, true),
+                            extras = mapOf(ENTRY_IDENTIFIER_EXTRA to searchTerm.entryIdentifier)
+                        ))
+                    }
                 }
             }
-            iterator.close()
+            targetNavigator.applyDecorations(decorations, DICTIONARY_GROUP)
+        } finally {
+            dictionaryRefreshMutex.unlock()
         }
-        targetNavigator.applyDecorations(decorations, DICTIONARY_GROUP)
     }
 
     private suspend fun refreshQuoteHighlights() {
