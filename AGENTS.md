@@ -118,6 +118,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - En vertical, Índice, Citas, Diccionario y Marcador viven bajo Herramientas. En horizontal aparecen como botones separados. Aa permanece independiente.
 - El panel Aa y los demás menús deben respetar la paleta global de menús.
 - Los saltos realizados con cualquiera de los sliders o con el índice alimentan un historial implementado como lista doblemente ligada. Con los controles visibles se ofrecen dinámicamente `Regresar a página #`, `Limpiar historial` y `Avanzar a página #`; un salto nuevo después de retroceder descarta la rama futura.
+- Abrir una cita desde el lector y navegar entre coincidencias de la búsqueda interna también alimenta ese mismo historial. La búsqueda usa el servicio de la publicación Readium y no distingue mayúsculas de minúsculas.
 - Las preferencias de lectura son globales entre libros: tema, fuente, tamaño, grosor, interlineado, alineación, márgenes, orientación/paginación y opciones relacionadas.
 - El cambio rápido alterna únicamente entre los dos temas configurados; no cambia tipografía ni dimensiones.
 - El contenido inicia en la parte superior. La alineación horizontal sigue siendo configurable.
@@ -199,6 +200,7 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 - No fijes fondos crema, blancos o negros en Kotlin/XML si deben responder al tema. Usa la paleta y contraste dinámico.
 - El texto debe obtener contraste suficiente sobre cada fondo. No derives el color del texto suponiendo que todos los temas son claros.
 - Para colores personalizados usa solamente `KvColorPickerOverlay.show(...)`. No reincorpores sliders RGB/HSV ni otro selector paralelo.
+- La identidad visual usa `ic_michis_reader_mark`, el icono adaptativo `ic_launcher` y su capa `monochrome`. Conserva las variantes clara/nocturna y la capa monocromática para iconos temáticos; no reemplaces el launcher por un PNG plano con bordes blancos.
 - Los spinners usan `LimitedHeightSpinner`: 3–4 opciones visibles, scroll para el resto, fondo temático, selección por toque y sin apertura por pulsación prolongada.
 - La transición futura de textos visibles a `strings.xml` está especificada en `cambios_futuro.md`. Si el usuario dice “mandarlo para el futuro”, documenta la propuesta allí.
 

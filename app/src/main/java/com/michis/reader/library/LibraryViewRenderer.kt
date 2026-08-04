@@ -105,7 +105,7 @@ internal class LibraryViewRenderer(
                 card.folderIcon.visibility = View.GONE
                 card.coverImage.apply {
                     visibility = View.VISIBLE
-                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                     setImageDrawable(ColorDrawable(Color.rgb(224, 218, 205)))
                     contentDescription = "Portada de ${item.value.title}"
                     BookCoverLoader.load(activity, item.value, this)
