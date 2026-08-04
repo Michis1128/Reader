@@ -95,6 +95,8 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var sliderJumpOriginPage: Int? = null
     private var pendingContentsJumpOriginPage: Int? = null
     private var pendingContentsJumpToken = 0
+    private var pendingSearchJumpOriginPage: Int? = null
+    private var pendingSearchJumpToken = 0
     private val inactivityHandler = Handler(Looper.getMainLooper())
     private lateinit var spenRemoteController: SpenRemoteController
     private var pagePositions = emptyList<org.readium.r2.shared.publication.Locator>()
@@ -493,6 +495,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             searchPanelBinding.searchResultLabel.text = "Escribe un texto para buscar"
             return
         }
+        val initialPageBeforeSearch = currentPageIndex()
         val requestToken = ++searchRequestToken
         searchPanelBinding.searchResultLabel.text = "Buscando…"
         searchPanelBinding.previousResultButton.isEnabled = false
@@ -510,7 +513,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             currentSearchResultIndex = if (matches.isEmpty()) -1 else 0
             decorationController.showSearchResults(matches, currentSearchResultIndex)
             updateSearchControls()
-            if (matches.isNotEmpty()) navigateToSearchResult(0)
+            if (matches.isNotEmpty()) navigateToSearchResult(0, initialPageBeforeSearch)
         }
     }
 
@@ -524,12 +527,16 @@ class ReadiumEpubActivity : FragmentActivity() {
         navigateToSearchResult(target)
     }
 
-    private fun navigateToSearchResult(index: Int) {
+    private fun navigateToSearchResult(index: Int, originPage: Int = currentPageIndex()) {
         val locator = searchResults.getOrNull(index) ?: return
-        val targetPage = pagePositions.indexOfFirst { it.locations.position == locator.locations.position }
-        val originPage = currentPageIndex()
-        if (targetPage >= 0) recordPageJump(originPage, targetPage)
+        val jumpToken = ++pendingSearchJumpToken
+        pendingSearchJumpOriginPage = originPage
         navigator.go(locator, animated = pageAnimationsEnabled())
+        rootLayout.postDelayed({
+            if (pendingSearchJumpToken == jumpToken && pendingSearchJumpOriginPage == originPage) {
+                pendingSearchJumpOriginPage = null
+            }
+        }, 2_000L)
     }
 
     private fun updateSearchControls() {
@@ -576,6 +583,12 @@ class ReadiumEpubActivity : FragmentActivity() {
                         if (pageIndex != origin) {
                             recordPageJump(origin, pageIndex)
                             pendingContentsJumpOriginPage = null
+                        }
+                    }
+                    pendingSearchJumpOriginPage?.let { origin ->
+                        if (pageIndex != origin) {
+                            recordPageJump(origin, pageIndex)
+                            pendingSearchJumpOriginPage = null
                         }
                     }
                     if (!userIsDraggingProgress) progressSlider.progress = pageIndex
