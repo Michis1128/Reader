@@ -30,7 +30,7 @@
         android:layout_gravity="bottom"
         android:layout_marginStart="26dp"
         android:layout_marginEnd="26dp"
-        android:layout_marginBottom="7dp"
+        android:layout_marginBottom="2dp"
         android:alpha="0.62"
         android:contentDescription="Desplazarse por el libro"
         android:max="1"
@@ -54,4 +54,13 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="start" />
+
+    <FrameLayout
+        android:id="@+id/searchPanelHost"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="72dp"
+        android:layout_marginEnd="12dp" />
 </FrameLayout>

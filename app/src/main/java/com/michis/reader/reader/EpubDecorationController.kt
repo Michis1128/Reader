@@ -70,6 +70,25 @@ class EpubDecorationController(
         refreshQuoteHighlights()
     }
 
+    suspend fun showSearchResults(locators: List<Locator>, selectedIndex: Int) {
+        val targetNavigator = navigator ?: return
+        val decorations = locators.mapIndexed { index, locator ->
+            Decoration(
+                id = "search-$index",
+                locator = locator,
+                style = Decoration.Style.Highlight(
+                    if (index == selectedIndex) 0xCCFFB300.toInt() else 0x66FFEB3B,
+                    false
+                )
+            )
+        }
+        targetNavigator.applyDecorations(decorations, SEARCH_GROUP)
+    }
+
+    suspend fun clearSearchResults() {
+        navigator?.applyDecorations(emptyList(), SEARCH_GROUP)
+    }
+
     private suspend fun refreshDictionaryHighlights() {
         val opened = publication ?: return
         val targetNavigator = navigator ?: return
@@ -127,6 +146,7 @@ class EpubDecorationController(
     private companion object {
         const val DICTIONARY_GROUP = "book_dictionary"
         const val QUOTE_GROUP = "book_quotes"
+        const val SEARCH_GROUP = "book_search"
         const val ENTRY_IDENTIFIER_EXTRA = "dictionary_entry_identifier"
         const val QUOTE_IDENTIFIER_EXTRA = "quote_identifier"
     }

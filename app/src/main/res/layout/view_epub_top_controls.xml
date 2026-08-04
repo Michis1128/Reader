@@ -62,6 +62,19 @@
             android:textSize="12sp" />
 
         <Button
+            android:id="@+id/searchButton"
+            style="@style/Widget.MichisReader.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing_small"
+            android:minWidth="0dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="Buscar"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+
+        <Button
             android:id="@+id/quotesButton"
             style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"

@@ -118,6 +118,7 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - En vertical, Índice, Citas, Diccionario y Marcador viven bajo Herramientas. En horizontal aparecen como botones separados. Aa permanece independiente.
 - El panel Aa y los demás menús deben respetar la paleta global de menús.
 - Los saltos realizados con cualquiera de los sliders o con el índice alimentan un historial implementado como lista doblemente ligada. Con los controles visibles se ofrecen dinámicamente `Regresar a página #`, `Limpiar historial` y `Avanzar a página #`; un salto nuevo después de retroceder descarta la rama futura.
+- Abrir una cita desde el lector y navegar entre coincidencias de la búsqueda interna también alimenta ese mismo historial. La búsqueda usa el servicio de la publicación Readium y no distingue mayúsculas de minúsculas.
 - Las preferencias de lectura son globales entre libros: tema, fuente, tamaño, grosor, interlineado, alineación, márgenes, orientación/paginación y opciones relacionadas.
 - El cambio rápido alterna únicamente entre los dos temas configurados; no cambia tipografía ni dimensiones.
 - El contenido inicia en la parte superior. La alineación horizontal sigue siendo configurable.

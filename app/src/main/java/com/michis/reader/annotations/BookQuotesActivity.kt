@@ -79,6 +79,13 @@ class BookQuotesActivity : ComponentActivity() {
     }
 
     private fun openQuote(quote: SavedAnnotation) {
+        if (intent.getBooleanExtra(EXTRA_RETURN_TO_READER, false)) {
+            setResult(RESULT_OK, Intent()
+                .putExtra(EXTRA_QUOTE_LOCATION, quote.location)
+                .putExtra(EXTRA_QUOTE_PAGE, quote.pageNumber))
+            finish()
+            return
+        }
         val document: LibraryDocument = database.findDocument(documentIdentifier) ?: return
         startActivity(Intent(this, ReadiumEpubActivity::class.java)
             .putExtra("document_identifier", document.identifier)
@@ -90,5 +97,6 @@ class BookQuotesActivity : ComponentActivity() {
         const val EXTRA_DOCUMENT_IDENTIFIER = "document_identifier"
         const val EXTRA_QUOTE_LOCATION = "quote_location"
         const val EXTRA_QUOTE_PAGE = "quote_page"
+        const val EXTRA_RETURN_TO_READER = "return_to_reader"
     }
 }
