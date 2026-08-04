@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme.Base" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:colorAccent">#3559E0</item>
         <item name="android:navigationBarColor">#F7F7F9</item>
@@ -10,8 +10,6 @@
         <item name="android:editTextStyle">@style/Widget.MichisReader.Input</item>
         <item name="android:spinnerStyle">@style/Widget.MichisReader.Spinner</item>
     </style>
-
-    <style name="AppTheme" parent="@style/AppTheme.Base" />
 
     <!-- Valores visuales base. AppThemePalette sustituye los colores en tiempo de
          ejecución, mientras estos estilos conservan geometría y espaciado. -->

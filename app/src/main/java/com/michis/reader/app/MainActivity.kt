@@ -13,7 +13,6 @@ import com.michis.reader.ui.SystemBarInsets
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.content.res.ColorStateList
 import android.view.View
 import android.widget.*
 import androidx.activity.ComponentActivity
@@ -84,7 +83,6 @@ class MainActivity : ComponentActivity() {
         SystemBarInsets.apply(mainScreen)
         setContentView(mainScreen)
         AppThemePalette.apply(this)
-        updateBrandColors()
         restoreLastDocumentFolder()
         importCoordinator.importIncoming(intent)
         refreshLibrary()
@@ -131,12 +129,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         AppThemePalette.apply(this)
-        updateBrandColors()
         if (::syncController.isInitialized) syncController.refreshStatus()
-    }
-
-    private fun updateBrandColors() {
-        binding.appMark.imageTintList = ColorStateList.valueOf(AppThemePalette.current(this).accent)
     }
 
     private fun openDocumentPicker() {
