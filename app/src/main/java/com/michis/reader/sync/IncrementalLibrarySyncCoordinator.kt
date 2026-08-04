@@ -20,16 +20,8 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         onStep: (String) -> Unit = {}
     ): FullSyncResult {
         onStep("3/7 · Leyendo el manifiesto de cambios")
-        var manifest = repository.downloadNamedJsonOrNull(accessToken, folder.identifier, MANIFEST_FILE_NAME)
-            ?.let { JSONObject(it.toString(Charsets.UTF_8)) }
-        var firstBackup = false
-        if (manifest == null) {
+        val manifest = loadManifest(accessToken, accountIdentifier, folder, repository) {
             onStep("4/7 · Migrando el respaldo anterior")
-            repository.downloadLibrarySnapshotOrNull(accessToken, accountIdentifier, folder.identifier)?.let { bytes ->
-                mergeRemoteRoot(JSONObject(bytes.toString(Charsets.UTF_8)))
-            }
-            manifest = emptyManifest()
-            firstBackup = true
         }
 
         var localRoot = localRoot()
@@ -69,20 +61,16 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
             }
             newEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", localUpdatedAt))
         }
-        manifest = JSONObject()
+        val updatedManifest = JSONObject()
             .put("schemaVersion", MANIFEST_SCHEMA_VERSION)
             .put("books", newEntries)
             .put("tombstones", localRoot.optJSONArray("tombstones") ?: JSONArray())
             .put("updatedAt", System.currentTimeMillis())
-        repository.uploadNamedJson(accessToken, folder.identifier, MANIFEST_FILE_NAME, manifest.toString(2).toByteArray())
+        repository.uploadNamedJson(accessToken, folder.identifier, MANIFEST_FILE_NAME, updatedManifest.toString(2).toByteArray())
         onStep("7/7 · Sincronización incremental completada")
         return FullSyncResult(
-            firstBackup = firstBackup,
             documentCount = newEntries.length(),
-            downloadedDocumentCount = downloadedBookCount,
-            readingMerge = ReadingMergeResult(0, 0, 0, 0),
-            dictionaryMerge = DictionaryMergeResult(0, 0, 0, 0, 0, 0),
-            deletionMerge = DeletionMergeResult(0, 0, 0)
+            downloadedDocumentCount = downloadedBookCount
         )
     }
 
@@ -94,14 +82,7 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         documentIdentifier: Long
     ) {
         if (database.findDocument(documentIdentifier) == null) return
-        var manifest = repository.downloadNamedJsonOrNull(accessToken, folder.identifier, MANIFEST_FILE_NAME)
-            ?.let { JSONObject(it.toString(Charsets.UTF_8)) }
-        if (manifest == null) {
-            repository.downloadLibrarySnapshotOrNull(accessToken, accountIdentifier, folder.identifier)?.let { bytes ->
-                mergeRemoteRoot(JSONObject(bytes.toString(Charsets.UTF_8)))
-            }
-            manifest = emptyManifest()
-        }
+        val manifest = loadManifest(accessToken, accountIdentifier, folder, repository)
         var localRoot = localRoot()
         var localDocument = localRoot.documentByIdentifier(documentIdentifier) ?: return
         val key = localDocument.optString("documentKey")
@@ -129,9 +110,27 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
 
     private fun mergeRemoteRoot(root: JSONObject) {
         val bytes = root.toString().toByteArray()
-        LibraryReadingStateMerger(context).merge(bytes)
-        LibraryDictionaryStateMerger(context).merge(bytes)
-        LibraryDeletionSynchronizer(context).apply(bytes)
+        SyncSafetyBackupRepository(context).saveCurrentLibraryState()
+        LibraryReadingStateMerger(context).merge(bytes, createSafetyBackup = false)
+        LibraryDictionaryStateMerger(context).merge(bytes, createSafetyBackup = false)
+        LibraryDeletionSynchronizer(context).apply(bytes, createSafetyBackup = false)
+    }
+
+    private fun loadManifest(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        beforeLegacyMigration: () -> Unit = {}
+    ): JSONObject {
+        repository.downloadNamedJsonOrNull(accessToken, folder.identifier, MANIFEST_FILE_NAME)?.let { bytes ->
+            return JSONObject(bytes.toString(Charsets.UTF_8))
+        }
+        beforeLegacyMigration()
+        repository.downloadLibrarySnapshotOrNull(accessToken, accountIdentifier, folder.identifier)?.let { bytes ->
+            mergeRemoteRoot(JSONObject(bytes.toString(Charsets.UTF_8)))
+        }
+        return emptyManifest()
     }
 
     private fun localRoot() = JSONObject(LibrarySyncSnapshotBuilder(context).build().bytes.toString(Charsets.UTF_8))

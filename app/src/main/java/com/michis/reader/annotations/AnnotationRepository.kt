@@ -3,11 +3,10 @@ package com.michis.reader.annotations
 import com.michis.reader.data.*
 
 import android.content.ContentValues
-import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import java.util.UUID
 
-/** Persistencia de marcadores, citas y vocabulario global. */
+/** Persistencia de marcadores y citas. */
 internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
     fun addAnnotation(
         documentIdentifier: Long,
@@ -54,6 +53,11 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         }
     }
 
+    fun count(documentIdentifier: Long, kind: String): Int = database.readableDatabase.rawQuery(
+        "SELECT COUNT(*) FROM annotations WHERE document_identifier = ? AND kind = ?",
+        arrayOf(documentIdentifier.toString(), kind)
+    ).use { cursor -> if (cursor.moveToFirst()) cursor.getInt(0) else 0 }
+
     fun updateQuote(identifier: Long, note: String, color: Int): Int = database.writableDatabase.update(
         "annotations",
         ContentValues().apply {
@@ -77,42 +81,6 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         swapPositions(
             "annotations", "identifier", identifier.toString(), ordered[targetIndex].identifier.toString(),
             ordered[currentIndex].orderPosition, ordered[targetIndex].orderPosition, updateSyncTimestamp = true
-        )
-    }
-
-    fun saveVocabulary(word: String, context: String) {
-        if (word.isBlank()) return
-        database.writableDatabase.insertWithOnConflict("vocabulary", null, ContentValues().apply {
-            put("word", word.trim())
-            put("context", context)
-            put("created_at", System.currentTimeMillis())
-            put("order_position", nextPosition("vocabulary"))
-        }, SQLiteDatabase.CONFLICT_IGNORE)
-    }
-
-    fun vocabulary(): List<VocabularyEntry> = database.readableDatabase.rawQuery(
-        "SELECT word, context, created_at, order_position FROM vocabulary ORDER BY order_position, created_at",
-        null
-    ).use { cursor ->
-        buildList {
-            while (cursor.moveToNext()) add(
-                VocabularyEntry(cursor.getString(0), cursor.getString(1), cursor.getLong(2), cursor.getInt(3))
-            )
-        }
-    }
-
-    fun deleteVocabulary(word: String): Int =
-        database.writableDatabase.delete("vocabulary", "word = ?", arrayOf(word))
-
-    fun moveVocabulary(word: String, direction: Int) {
-        val ordered = vocabulary()
-        val currentIndex = ordered.indexOfFirst { it.word == word }
-        if (currentIndex < 0) return
-        val targetIndex = (currentIndex + direction).coerceIn(0, ordered.lastIndex)
-        if (currentIndex == targetIndex) return
-        swapPositions(
-            "vocabulary", "word", word, ordered[targetIndex].word,
-            ordered[currentIndex].orderPosition, ordered[targetIndex].orderPosition, updateSyncTimestamp = false
         )
     }
 

@@ -105,6 +105,18 @@ internal class DictionaryRepository(private val database: SQLiteOpenHelper) {
             .flatMap(::entriesForDocument)
             .distinctBy { it.term.lowercase() }
 
+    fun hasEffectiveEntries(documentIdentifier: Long): Boolean = database.readableDatabase.rawQuery(
+        """SELECT EXISTS(
+               SELECT 1 FROM dictionary_entries entry
+               WHERE entry.document_identifier = ?
+                  OR entry.document_identifier IN (
+                      SELECT owner_document_identifier FROM dictionary_document_links
+                      WHERE linked_document_identifier = ?
+                  )
+           )""",
+        arrayOf(documentIdentifier.toString(), documentIdentifier.toString())
+    ).use { cursor -> cursor.moveToFirst() && cursor.getInt(0) != 0 }
+
     fun linkedDocuments(ownerDocumentIdentifier: Long): Set<Long> = database.readableDatabase.rawQuery(
         "SELECT linked_document_identifier FROM dictionary_document_links " +
             "WHERE owner_document_identifier = ?",

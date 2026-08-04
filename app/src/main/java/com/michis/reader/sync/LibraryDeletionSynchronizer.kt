@@ -5,7 +5,6 @@ import com.michis.reader.data.*
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 
 class LibraryDeletionSynchronizer(private val context: Context) {
     fun preview(remoteBytes: ByteArray): List<PendingSyncDeletion> {
@@ -13,10 +12,9 @@ class LibraryDeletionSynchronizer(private val context: Context) {
         return ReaderDatabase.getInstance(context).previewSyncDeletions(root.remoteTombstones())
     }
 
-    fun apply(remoteBytes: ByteArray): DeletionMergeResult {
+    fun apply(remoteBytes: ByteArray, createSafetyBackup: Boolean = true): DeletionMergeResult {
         val root = validatedRoot(remoteBytes)
-        val localSnapshot = LibrarySyncSnapshotBuilder(context).build()
-        saveSafetyCopy(localSnapshot.bytes)
+        if (createSafetyBackup) SyncSafetyBackupRepository(context).saveCurrentLibraryState()
         return ReaderDatabase.getInstance(context).applySyncDeletions(root.remoteTombstones())
     }
 
@@ -37,13 +35,4 @@ class LibraryDeletionSynchronizer(private val context: Context) {
         }
     }
 
-    private fun saveSafetyCopy(bytes: ByteArray) {
-        val directory = File(context.filesDir, "sync-safety").apply { mkdirs() }
-        val temporary = File(directory, "library-state-before-deletions.tmp")
-        val destination = File(directory, "library-state-before-deletions.json")
-        temporary.writeBytes(bytes)
-        check(temporary.renameTo(destination) || runCatching {
-            temporary.copyTo(destination, overwrite = true); temporary.delete(); true
-        }.getOrDefault(false)) { "No se pudo guardar la copia local de seguridad" }
-    }
 }

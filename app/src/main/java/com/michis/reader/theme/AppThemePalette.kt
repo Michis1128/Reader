@@ -14,6 +14,7 @@ import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Switch
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import java.util.WeakHashMap
@@ -69,6 +70,16 @@ object AppThemePalette {
     fun forReader(activity: Activity, readingTheme: String): AppPalette {
         val mode = ReaderSettingsRepository.get(activity).menuColorMode
         return if (mode == "theme" || mode.startsWith("theme:")) named(readingTheme) else current(activity)
+    }
+
+    /** Aplica la misma geometría y contraste globales a los controles superpuestos del lector. */
+    fun applyReaderMenus(activity: Activity, readingTheme: String, roots: Collection<View>): AppPalette {
+        val colors = forReader(activity, readingTheme)
+        roots.forEach { root ->
+            if (root is ViewGroup) markSurface(root)
+            style(root, colors, colors.surface, colors.primaryText, 1)
+        }
+        return colors
     }
 
     fun named(name: String): AppPalette = when (name) {
@@ -127,7 +138,12 @@ object AppThemePalette {
             val drawableBackground = view.background
             val solid = (drawableBackground as? ColorDrawable)?.color
             val hasPanelShape = drawableBackground != null && solid == null
-            val previousRole = managedSurfaces[view]
+            val taggedRole = when (view.tag) {
+                "reader_menu_surface" -> SurfaceRole.SURFACE
+                "reader_menu_card" -> SurfaceRole.CARD
+                else -> null
+            }
+            val previousRole = managedSurfaces[view] ?: taggedRole
             val role = previousRole ?: when {
                 depth == 0 -> SurfaceRole.BACKGROUND
                 hasPanelShape -> SurfaceRole.CARD
@@ -180,6 +196,11 @@ object AppThemePalette {
                 view.setTextColor(colors.onAccent)
                 view.minimumHeight = (48 * view.resources.displayMetrics.density).toInt()
                 view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
+            }
+            is SeekBar -> {
+                view.progressTintList = ColorStateList.valueOf(colors.accent)
+                view.thumbTintList = ColorStateList.valueOf(colors.accent)
+                view.progressBackgroundTintList = ColorStateList.valueOf(colors.outline)
             }
             is EditText -> {
                 val inputText = contrast(colors.surface)

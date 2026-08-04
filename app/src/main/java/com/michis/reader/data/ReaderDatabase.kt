@@ -24,10 +24,6 @@ data class SavedAnnotation(
     val location: Int, val pageNumber: Int, val createdAt: Long, val orderPosition: Int
 )
 
-data class VocabularyEntry(
-    val word: String, val context: String, val createdAt: Long, val orderPosition: Int
-)
-
 data class DictionaryCategory(val identifier: Long, val documentIdentifier: Long, val name: String)
 data class DictionaryEntry(
     val identifier: Long, val categoryIdentifier: Long, val documentIdentifier: Long,
@@ -234,20 +230,14 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun annotations(documentIdentifier: Long? = null) = annotationsRepository.annotations(documentIdentifier)
 
+    fun annotationCount(documentIdentifier: Long, kind: String) = annotationsRepository.count(documentIdentifier, kind)
+
     fun deleteAnnotation(identifier: Long) = synchronization.deleteEntity("annotations", "annotation", identifier)
     fun updateQuote(identifier: Long, note: String, color: Int) = annotationsRepository.updateQuote(identifier, note, color)
 
     fun bookmarkAt(documentIdentifier: Long, location: Int) = annotationsRepository.bookmarkAt(documentIdentifier, location)
 
     fun moveAnnotation(identifier: Long, direction: Int) = annotationsRepository.moveAnnotation(identifier, direction)
-
-    fun saveVocabulary(word: String, context: String = "") = annotationsRepository.saveVocabulary(word, context)
-
-    fun vocabulary() = annotationsRepository.vocabulary()
-
-    fun deleteVocabulary(word: String) = annotationsRepository.deleteVocabulary(word)
-
-    fun moveVocabulary(word: String, direction: Int) = annotationsRepository.moveVocabulary(word, direction)
 
     fun dictionaryCategories(documentIdentifier: Long) = dictionaries.categories(documentIdentifier)
 
@@ -265,6 +255,8 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
         dictionaries.effectiveOwnerIdentifiers(documentIdentifier)
 
     fun effectiveDictionaryEntries(documentIdentifier: Long) = dictionaries.effectiveEntries(documentIdentifier)
+
+    fun hasEffectiveDictionaryEntries(documentIdentifier: Long) = dictionaries.hasEffectiveEntries(documentIdentifier)
 
     fun linkedDocuments(ownerDocumentIdentifier: Long) = dictionaries.linkedDocuments(ownerDocumentIdentifier)
 

@@ -77,4 +77,19 @@ class ReaderSettingsRepositoryTest {
         assertEquals(ReaderSettingsRepository.MAXIMUM_CUSTOM_PAGE_MARGIN_DP, settings.customPageMarginTopDp, 0f)
         assertEquals(ReaderSettingsRepository.MINIMUM_CUSTOM_PAGE_MARGIN_DP, settings.customPageMarginBottomDp, 0f)
     }
+
+    @Test
+    fun globalReaderPreferencesUseTypedDefaultsAndBoundaries() {
+        assertEquals(ReaderSettingsRepository.DEFAULT_FONT_WEIGHT, settings.fontWeight, 0f)
+        assertEquals(true, settings.pageTurnAnimations)
+        assertEquals(false, settings.continuousScroll)
+        assertEquals("Día", settings.quickMode(0))
+        assertEquals("Noche", settings.quickMode(1))
+
+        settings.fontWeight = 9f
+        settings.readerOrientation = 20
+
+        assertEquals(2f, settings.fontWeight, 0f)
+        assertEquals(2, settings.readerOrientation)
+    }
 }

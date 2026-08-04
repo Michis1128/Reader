@@ -5,15 +5,14 @@ import com.michis.reader.data.*
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 
 class LibraryReadingStateMerger(private val context: Context) {
-    fun merge(remoteBytes: ByteArray): ReadingMergeResult {
+    fun merge(remoteBytes: ByteArray, createSafetyBackup: Boolean = true): ReadingMergeResult {
         val remoteRoot = JSONObject(remoteBytes.toString(Charsets.UTF_8))
         require(remoteRoot.optInt("schemaVersion", -1) == 2) { "La fusión requiere un respaldo de esquema 2" }
 
         val localSnapshot = LibrarySyncSnapshotBuilder(context).build()
-        saveSafetyCopy(localSnapshot.bytes)
+        if (createSafetyBackup) SyncSafetyBackupRepository(context).save(localSnapshot.bytes)
         val localRoot = JSONObject(localSnapshot.bytes.toString(Charsets.UTF_8))
         val localByDocumentKey = (localRoot.optJSONArray("documents") ?: JSONArray()).byDocumentKey()
         val remoteDocuments = remoteRoot.optJSONArray("documents") ?: JSONArray()
@@ -29,16 +28,6 @@ class LibraryReadingStateMerger(private val context: Context) {
             }
         }
         return database.mergeReadingState(matchedDocuments)
-    }
-
-    private fun saveSafetyCopy(bytes: ByteArray) {
-        val directory = File(context.filesDir, "sync-safety").apply { mkdirs() }
-        val temporary = File(directory, "library-state-before-merge.tmp")
-        val destination = File(directory, "library-state-before-merge.json")
-        temporary.writeBytes(bytes)
-        check(temporary.renameTo(destination) || runCatching {
-            temporary.copyTo(destination, overwrite = true); temporary.delete(); true
-        }.getOrDefault(false)) { "No se pudo guardar la copia local de seguridad" }
     }
 
     private fun JSONArray.byDocumentKey(): Map<String, JSONObject> = buildMap {

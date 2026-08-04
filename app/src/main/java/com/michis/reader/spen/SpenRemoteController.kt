@@ -1,6 +1,6 @@
 package com.michis.reader.spen
 
-import android.content.Context
+import android.app.Activity
 import android.os.Handler
 import android.os.Looper
 import com.samsung.android.sdk.penremote.AirMotionEvent
@@ -14,10 +14,9 @@ import kotlin.math.atan2
 import kotlin.math.hypot
 
 class SpenRemoteController(
-    context: Context,
+    private val activity: Activity,
     private val gestureReceived: (SpenControlPreferences.Gesture) -> Unit
 ) {
-    private val activityContext = context
     private val mainHandler = Handler(Looper.getMainLooper())
     private val spenRemote = SpenRemote.getInstance()
     private var unitManager: SpenUnitManager? = null
@@ -59,9 +58,9 @@ class SpenRemoteController(
         runCatching {
             if (spenRemote.isConnected) {
                 // Una actividad anterior pudo dejar la conexión viva; la renovamos para registrar sus listeners aquí.
-                spenRemote.disconnect(activityContext)
+                spenRemote.disconnect(activity)
             }
-            spenRemote.connect(activityContext, object : SpenRemote.ConnectionResultCallback {
+            spenRemote.connect(activity, object : SpenRemote.ConnectionResultCallback {
                 override fun onSuccess(manager: SpenUnitManager) {
                     isConnected = true
                     unitManager = manager
@@ -89,7 +88,7 @@ class SpenRemoteController(
         finishMotion?.let(mainHandler::removeCallbacks)
         runCatching { buttonUnit?.let { unitManager?.unregisterSpenEventListener(it) } }
         runCatching { motionUnit?.let { unitManager?.unregisterSpenEventListener(it) } }
-        runCatching { if (spenRemote.isConnected) spenRemote.disconnect(activityContext) }
+        runCatching { if (spenRemote.isConnected) spenRemote.disconnect(activity) }
         buttonUnit = null; motionUnit = null; unitManager = null; resetMotion()
     }
 
@@ -97,12 +96,12 @@ class SpenRemoteController(
         val timestamp = android.os.SystemClock.uptimeMillis()
         if (timestamp - previousButtonRelease in 1..DOUBLE_CLICK_MILLISECONDS) {
             pendingSingleClick?.let(mainHandler::removeCallbacks); pendingSingleClick = null; previousButtonRelease = 0L
-            gestureReceived(SpenControlPreferences.gestures[1])
+            gestureReceived(SpenControlPreferences.doubleClick)
         } else {
             previousButtonRelease = timestamp
             pendingSingleClick = Runnable {
                 pendingSingleClick = null; previousButtonRelease = 0L
-                gestureReceived(SpenControlPreferences.gestures[0])
+                gestureReceived(SpenControlPreferences.click)
             }.also { mainHandler.postDelayed(it, DOUBLE_CLICK_MILLISECONDS) }
         }
     }
@@ -126,13 +125,16 @@ class SpenRemoteController(
 
     private fun recognizeMotion() {
         val gesture = when {
-            pathDistance > 1.2f && abs(accumulatedAngle) > 4.2f -> if (accumulatedAngle < 0) 6 else 7
-            abs(totalX) >= SWIPE_THRESHOLD && abs(totalX) > abs(totalY) * 1.25f -> if (totalX < 0) 2 else 3
-            abs(totalY) >= SWIPE_THRESHOLD -> if (totalY > 0) 4 else 5
+            pathDistance > CIRCLE_MINIMUM_PATH && abs(accumulatedAngle) > CIRCLE_MINIMUM_ANGLE ->
+                if (accumulatedAngle < 0) SpenControlPreferences.circleClockwise else SpenControlPreferences.circleCounterclockwise
+            abs(totalX) >= SWIPE_THRESHOLD && abs(totalX) > abs(totalY) * SWIPE_AXIS_DOMINANCE ->
+                if (totalX < 0) SpenControlPreferences.swipeLeft else SpenControlPreferences.swipeRight
+            abs(totalY) >= SWIPE_THRESHOLD ->
+                if (totalY > 0) SpenControlPreferences.swipeUp else SpenControlPreferences.swipeDown
             else -> null
         }
         resetMotion()
-        gesture?.let { gestureReceived(SpenControlPreferences.gestures[it]) }
+        gesture?.let(gestureReceived)
     }
 
     private fun resetMotion() {
@@ -143,6 +145,9 @@ class SpenRemoteController(
         private const val DOUBLE_CLICK_MILLISECONDS = 350L
         private const val MOTION_END_MILLISECONDS = 180L
         private const val SWIPE_THRESHOLD = .28f
+        private const val SWIPE_AXIS_DOMINANCE = 1.25f
         private const val MINIMUM_GESTURE_DISTANCE = .12f
+        private const val CIRCLE_MINIMUM_PATH = 1.2f
+        private const val CIRCLE_MINIMUM_ANGLE = 4.2f
     }
 }

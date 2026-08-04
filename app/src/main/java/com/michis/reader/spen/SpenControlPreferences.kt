@@ -22,14 +22,17 @@ object SpenControlPreferences {
     )
 
     data class Gesture(val label: String, val preferenceKey: String, val defaultAction: String)
+
+    val click = Gesture("Clic del botón", "spen_click_action", NEXT)
+    val doubleClick = Gesture("Doble clic", "spen_double_click_action", PREVIOUS)
+    val swipeLeft = Gesture("Deslizar a la izquierda", "spen_swipe_left_action", BOOKMARK)
+    val swipeRight = Gesture("Deslizar a la derecha", "spen_swipe_right_action", QUICK_THEME)
+    val swipeUp = Gesture("Deslizar hacia arriba", "spen_swipe_up_action", LARGER_TEXT)
+    val swipeDown = Gesture("Deslizar hacia abajo", "spen_swipe_down_action", SMALLER_TEXT)
+    val circleClockwise = Gesture("Círculo horario", "spen_circle_clockwise_action", ADD_DICTIONARY)
+    val circleCounterclockwise = Gesture("Círculo antihorario", "spen_circle_counterclockwise_action", ADD_QUOTE)
+
     val gestures = listOf(
-        Gesture("Clic del botón", "spen_click_action", NEXT),
-        Gesture("Doble clic", "spen_double_click_action", PREVIOUS),
-        Gesture("Deslizar a la izquierda", "spen_swipe_left_action", BOOKMARK),
-        Gesture("Deslizar a la derecha", "spen_swipe_right_action", QUICK_THEME),
-        Gesture("Deslizar hacia arriba", "spen_swipe_up_action", LARGER_TEXT),
-        Gesture("Deslizar hacia abajo", "spen_swipe_down_action", SMALLER_TEXT),
-        Gesture("Círculo horario", "spen_circle_clockwise_action", ADD_DICTIONARY),
-        Gesture("Círculo antihorario", "spen_circle_counterclockwise_action", ADD_QUOTE)
+        click, doubleClick, swipeLeft, swipeRight, swipeUp, swipeDown, circleClockwise, circleCounterclockwise
     )
 }

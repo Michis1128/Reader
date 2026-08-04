@@ -1,27 +1,16 @@
 package com.michis.reader.sync.drive
 
-import com.michis.reader.sync.LibrarySyncSnapshot
-
 import android.content.Context
 import android.net.Uri
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
-import java.time.Instant
 import java.util.UUID
 
 data class GoogleDriveFolder(val identifier: String, val name: String)
-data class GoogleDriveLibraryBackupVerification(
-    val fileIdentifier: String,
-    val sha256: String,
-    val verifiedAt: String
-)
-
 /** Operaciones mínimas y no destructivas para preparar la raíz de sincronización. */
 class GoogleDriveFolderRepository(private val context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val httpClient = GoogleDriveHttpClient()
 
     fun savedFolder(accountIdentifier: String): GoogleDriveFolder? {
         val identifier = preferences.getString(folderKey(accountIdentifier), null)?.takeIf { it.isNotBlank() } ?: return null
@@ -36,38 +25,6 @@ class GoogleDriveFolderRepository(private val context: Context) {
         val folder = existing ?: createFolder(accessToken)
         preferences.edit().putString(folderKey(accountIdentifier), folder.identifier).apply()
         return folder
-    }
-
-    fun uploadAndVerifyLibrarySnapshot(
-        accessToken: String,
-        accountIdentifier: String,
-        folderIdentifier: String,
-        snapshot: LibrarySyncSnapshot
-    ): GoogleDriveLibraryBackupVerification {
-        val existingIdentifier = findNamedFile(accessToken, folderIdentifier, LIBRARY_STATE_FILE_NAME)
-        val fileIdentifier = if (existingIdentifier == null) {
-            createJsonFile(accessToken, folderIdentifier, LIBRARY_STATE_FILE_NAME, "michisReaderLibraryState", snapshot.bytes)
-        } else {
-            updateManifest(accessToken, existingIdentifier, snapshot.bytes)
-            existingIdentifier
-        }
-        val downloadedHash = sha256(downloadFile(accessToken, fileIdentifier))
-        val expectedHash = sha256(snapshot.bytes)
-        check(downloadedHash == expectedHash) { "El respaldo descargado no coincide con el enviado" }
-        val verifiedAt = Instant.now().toString()
-        preferences.edit()
-            .putString(libraryStateKey(accountIdentifier), fileIdentifier)
-            .putString(libraryStateHashKey(accountIdentifier), downloadedHash)
-            .putString(libraryStateVerifiedAtKey(accountIdentifier), verifiedAt)
-            .apply()
-        return GoogleDriveLibraryBackupVerification(fileIdentifier, downloadedHash, verifiedAt)
-    }
-
-    fun savedLibraryBackupVerification(accountIdentifier: String): GoogleDriveLibraryBackupVerification? {
-        val identifier = preferences.getString(libraryStateKey(accountIdentifier), null) ?: return null
-        val hash = preferences.getString(libraryStateHashKey(accountIdentifier), null) ?: return null
-        val verifiedAt = preferences.getString(libraryStateVerifiedAtKey(accountIdentifier), null) ?: return null
-        return GoogleDriveLibraryBackupVerification(identifier, hash, verifiedAt)
     }
 
     fun downloadLibrarySnapshot(
@@ -110,7 +67,7 @@ class GoogleDriveFolderRepository(private val context: Context) {
     private fun validateFolder(accessToken: String, identifier: String): Boolean {
         val url = "$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,trashed"
         return runCatching {
-            val response = executeJsonRequest(url, "GET", accessToken)
+            val response = httpClient.json(url, accessToken)
             response.optString("mimeType") == FOLDER_MIME_TYPE && !response.optBoolean("trashed", false)
         }.getOrDefault(false)
     }
@@ -123,7 +80,7 @@ class GoogleDriveFolderRepository(private val context: Context) {
             .appendQueryParameter("fields", "files(id,name)")
             .appendQueryParameter("pageSize", "10")
             .build().toString()
-        val files = executeJsonRequest(url, "GET", accessToken).optJSONArray("files") ?: JSONArray()
+        val files = httpClient.json(url, accessToken).optJSONArray("files") ?: JSONArray()
         if (files.length() == 0) return null
         val file = files.getJSONObject(0)
         return GoogleDriveFolder(file.getString("id"), file.optString("name", SYNC_FOLDER_NAME))
@@ -135,7 +92,7 @@ class GoogleDriveFolderRepository(private val context: Context) {
             .put("mimeType", FOLDER_MIME_TYPE)
             .put("appProperties", JSONObject().put(APP_PROPERTY_KEY, APP_PROPERTY_VALUE))
         val url = "$DRIVE_FILES_ENDPOINT?fields=id,name"
-        val response = executeJsonRequest(url, "POST", accessToken, body.toString())
+        val response = httpClient.json(url, accessToken, "POST", body.toString())
         return GoogleDriveFolder(response.getString("id"), response.optString("name", SYNC_FOLDER_NAME))
     }
 
@@ -145,9 +102,8 @@ class GoogleDriveFolderRepository(private val context: Context) {
         folderIdentifier: String,
         expectedName: String
     ): Boolean = runCatching {
-        val response = executeJsonRequest(
+        val response = httpClient.json(
             "$DRIVE_FILES_ENDPOINT/$identifier?fields=id,name,mimeType,trashed,parents",
-            "GET",
             accessToken
         )
         response.optString("name") == expectedName &&
@@ -174,10 +130,10 @@ class GoogleDriveFolderRepository(private val context: Context) {
             "--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
         val footer = "\r\n--$boundary--\r\n"
         val requestBytes = header.toByteArray(Charsets.UTF_8) + bytes + footer.toByteArray(Charsets.UTF_8)
-        val response = executeByteRequest(
+        val response = httpClient.bytes(
             "$DRIVE_UPLOAD_ENDPOINT?uploadType=multipart&fields=id",
-            "POST",
             accessToken,
+            "POST",
             "multipart/related; boundary=$boundary",
             requestBytes
         )
@@ -193,92 +149,25 @@ class GoogleDriveFolderRepository(private val context: Context) {
             .appendQueryParameter("fields", "files(id,name)")
             .appendQueryParameter("pageSize", "10")
             .build().toString()
-        val files = executeJsonRequest(url, "GET", accessToken).optJSONArray("files") ?: JSONArray()
+        val files = httpClient.json(url, accessToken).optJSONArray("files") ?: JSONArray()
         return if (files.length() == 0) null else files.getJSONObject(0).getString("id")
     }
 
     private fun updateManifest(accessToken: String, fileIdentifier: String, bytes: ByteArray) {
-        executeByteRequest(
+        httpClient.bytes(
             "$DRIVE_UPLOAD_ENDPOINT/$fileIdentifier?uploadType=media",
-            "PATCH",
             accessToken,
+            "PATCH",
             "application/json; charset=UTF-8",
             bytes
         )
     }
 
     private fun downloadFile(accessToken: String, fileIdentifier: String): ByteArray =
-        executeByteRequest("$DRIVE_FILES_ENDPOINT/$fileIdentifier?alt=media", "GET", accessToken)
-
-    private fun executeJsonRequest(url: String, method: String, accessToken: String, body: String? = null): JSONObject {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.setRequestProperty("Authorization", "Bearer $accessToken")
-            connection.setRequestProperty("Accept", "application/json")
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(body) }
-            }
-            val statusCode = connection.responseCode
-            val responseText = (if (statusCode in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (statusCode !in 200..299) {
-                val apiMessage = runCatching {
-                    JSONObject(responseText).optJSONObject("error")?.optString("message")
-                }.getOrNull().orEmpty()
-                throw IllegalStateException("Drive respondió $statusCode${if (apiMessage.isBlank()) "" else ": $apiMessage"}")
-            }
-            return JSONObject(responseText)
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun executeByteRequest(
-        url: String,
-        method: String,
-        accessToken: String,
-        contentType: String? = null,
-        body: ByteArray? = null
-    ): ByteArray {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        try {
-            connection.requestMethod = method
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
-            connection.setRequestProperty("Authorization", "Bearer $accessToken")
-            connection.setRequestProperty("Accept", "application/json")
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", contentType ?: "application/octet-stream")
-                connection.outputStream.use { it.write(body) }
-            }
-            val statusCode = connection.responseCode
-            val responseBytes = (if (statusCode in 200..299) connection.inputStream else connection.errorStream)
-                ?.use { it.readBytes() } ?: ByteArray(0)
-            if (statusCode !in 200..299) {
-                val responseText = responseBytes.toString(Charsets.UTF_8)
-                val apiMessage = runCatching { JSONObject(responseText).optJSONObject("error")?.optString("message") }
-                    .getOrNull().orEmpty()
-                throw IllegalStateException("Drive respondió $statusCode${if (apiMessage.isBlank()) "" else ": $apiMessage"}")
-            }
-            return responseBytes
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
-        .digest(bytes).joinToString("") { "%02x".format(it) }
+        httpClient.bytes("$DRIVE_FILES_ENDPOINT/$fileIdentifier?alt=media", accessToken)
 
     private fun folderKey(accountIdentifier: String) = "folder_${accountIdentifier.lowercase().hashCode()}"
     private fun libraryStateKey(accountIdentifier: String) = "library_state_${accountIdentifier.lowercase().hashCode()}"
-    private fun libraryStateHashKey(accountIdentifier: String) = "library_state_hash_${accountIdentifier.lowercase().hashCode()}"
-    private fun libraryStateVerifiedAtKey(accountIdentifier: String) = "library_state_verified_${accountIdentifier.lowercase().hashCode()}"
 
     companion object {
         const val SYNC_FOLDER_NAME = "Michis Reader"
