@@ -50,7 +50,7 @@ data class PendingSyncDeletion(val entityType: String, val syncIdentifier: Strin
 data class DeletionMergeResult(val appliedDeletions: Int, val ignoredLocalNewer: Int, val alreadyAbsent: Int)
 data class BookResetResult(val annotationsDeleted: Int, val dictionaryEntriesDeleted: Int, val dictionaryCategoriesDeleted: Int)
 
-class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 8) {
+class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 9) {
     private val libraryDocuments by lazy { LibraryDocumentRepository(this) }
     private val annotationsRepository by lazy { AnnotationRepository(this) }
     private val dictionaries by lazy { DictionaryRepository(this) }
@@ -79,9 +79,6 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             sync_id TEXT NOT NULL UNIQUE, updated_at INTEGER NOT NULL,
             FOREIGN KEY(document_identifier) REFERENCES documents(identifier) ON DELETE CASCADE)""")
         database.execSQL("CREATE INDEX annotations_document_index ON annotations(document_identifier)")
-        database.execSQL("""CREATE TABLE vocabulary (
-            word TEXT PRIMARY KEY, context TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
-            order_position INTEGER NOT NULL DEFAULT 0)""")
         createDictionaryTables(database)
         createDictionaryLinksTable(database)
         createSyncTombstonesTable(database)
@@ -108,6 +105,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
                 database.execSQL("ALTER TABLE documents ADD COLUMN library_folder_remote_id TEXT")
             createLibraryFoldersTable(database)
         }
+        if (oldVersion < 9) database.execSQL("DROP TABLE IF EXISTS vocabulary")
     }
 
     private fun createLibraryFoldersTable(database: SQLiteDatabase) {
