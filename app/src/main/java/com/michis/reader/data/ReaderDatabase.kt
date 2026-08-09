@@ -182,6 +182,9 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun findDocuments(query: String = "") = libraryDocuments.findDocuments(query)
 
+    fun findCurrentlyReadingDocuments(query: String = "") =
+        libraryDocuments.findCurrentlyReadingDocuments(query)
+
     fun findDocumentsInFolder(folderRemoteIdentifier: String?, query: String = "") =
         libraryDocuments.findDocumentsInFolder(folderRemoteIdentifier, query)
 
@@ -215,7 +218,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
         links.forEach { synchronization.deleteDictionaryLink(it.ownerDocumentIdentifier, it.linkedDocumentIdentifier) }
         val now = System.currentTimeMillis()
         writableDatabase.update("documents", ContentValues().apply {
-            put("progress", 0f); put("reader_location", 0); put("last_opened_at", 0); put("updated_at", now)
+            put("progress", 0f); put("reader_location", 0); put("last_opened_at", -1); put("updated_at", now)
         }, "identifier = ?", arrayOf(identifier.toString()))
         return BookResetResult(annotations.size, entries.size, categories.size)
     }
@@ -224,6 +227,9 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun updateProgress(identifier: Long, location: Int, progress: Float) =
         libraryDocuments.updateProgress(identifier, location, progress)
+
+    fun markDocumentOpened(identifier: Long, openedAt: Long = System.currentTimeMillis()) =
+        libraryDocuments.markDocumentOpened(identifier, openedAt)
 
     fun addAnnotation(documentIdentifier: Long, kind: String, text: String, note: String, color: Int, location: Int, pageNumber: Int = 0) =
         annotationsRepository.addAnnotation(documentIdentifier, kind, text, note, color, location, pageNumber)

@@ -17,14 +17,44 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Button
 import android.widget.CheckBox
+import java.text.DateFormat
+import java.util.Date
 
 /** Presenta las secciones de citas, marcadores y diccionarios de la biblioteca. */
 internal class LibrarySectionsController(
     private val activity: Activity,
     private val database: ReaderDatabase,
     private val container: LinearLayout,
-    private val pathLabel: TextView
+    private val pathLabel: TextView,
+    private val openDocument: (Long) -> Unit
 ) {
+    fun showCurrentlyReading(query: String = "") {
+        prepareSection()
+        val documents = database.findCurrentlyReadingDocuments(query)
+        if (documents.isEmpty()) {
+            addEmpty(
+                if (query.isBlank()) "Los libros que abras aparecerán aquí, empezando por el más reciente."
+                else "No hay lecturas recientes que coincidan con la búsqueda."
+            )
+        }
+        val dateFormatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+        documents.forEach { document ->
+            container.addView(card {
+                addView(title(document.title))
+                if (document.author.isNotBlank()) addView(TextView(context).apply {
+                    text = document.author
+                    textSize = 14f
+                })
+                addView(TextView(context).apply {
+                    text = "Última lectura: ${dateFormatter.format(Date(document.lastOpenedAt))}"
+                    textSize = 13f
+                })
+                setOnClickListener { openDocument(document.identifier) }
+            })
+        }
+        container.post { AppThemePalette.apply(activity) }
+    }
+
     fun showAnnotations(kind: String) {
         prepareSection()
         val annotations = database.annotations().filter { it.kind == kind }

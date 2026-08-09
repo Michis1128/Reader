@@ -40,10 +40,11 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
                     if (cursor.moveToFirst()) Triple(cursor.getDouble(0), cursor.getInt(1), cursor.getLong(2))
                     else Triple(0.0, 0, 0L)
                 }
-                val localIsUntouched = localReadingState.first <= 0.0 && localReadingState.second <= 0 && localReadingState.third <= 0L
-                val remoteHasProgress = remoteDocument.optDouble("progress", 0.0) > 0.0 ||
-                    remoteDocument.optInt("readerLocation", 0) > 0
-                if (remoteUpdatedAt > localUpdatedAt || (localIsUntouched && remoteHasProgress)) {
+                val localIsUntouched = localReadingState.first <= 0.0 &&
+                    localReadingState.second <= 0 && localReadingState.third == 0L
+                val remoteHasReadingActivity = remoteDocument.optDouble("progress", 0.0) > 0.0 ||
+                    remoteDocument.optInt("readerLocation", 0) > 0 || remoteDocument.optLong("lastOpenedAt", 0) > 0
+                if (remoteUpdatedAt > localUpdatedAt || (localIsUntouched && remoteHasReadingActivity)) {
                     writableDatabase.update("documents", ContentValues().apply {
                         put("progress", remoteDocument.optDouble("progress", 0.0).coerceIn(0.0, 1.0))
                         put("reader_location", remoteDocument.optInt("readerLocation", 0).coerceAtLeast(0))

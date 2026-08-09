@@ -53,6 +53,7 @@ class ReaderDatabaseTest {
         assertEquals(0, database.readerLocation(documentIdentifier))
         val restoredDocument = requireNotNull(database.findDocument(documentIdentifier))
         assertEquals(0f, restoredDocument.progress, 0f)
+        assertEquals(-1L, restoredDocument.lastOpenedAt)
         assertTrue(database.annotations(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryCategories(documentIdentifier).isEmpty())
         assertTrue(database.dictionaryEntriesForDocument(documentIdentifier).isEmpty())
@@ -128,7 +129,42 @@ class ReaderDatabaseTest {
 
         assertEquals(1, result.progressUpdates)
         assertEquals(318, database.readerLocation(documentIdentifier))
-        assertEquals(0.62f, requireNotNull(database.findDocument(documentIdentifier)).progress, 0.001f)
+        val restoredDocument = requireNotNull(database.findDocument(documentIdentifier))
+        assertEquals(0.62f, restoredDocument.progress, 0.001f)
+        assertEquals(localMetadata.updatedAt - 20_000L, restoredDocument.lastOpenedAt)
+    }
+
+    @Test
+    fun currentlyReadingOnlyContainsOpenedBooksOrderedByMostRecent() {
+        val unopenedIdentifier = database.saveDocument("content://books/unopened.epub", "unopened.epub")
+        val olderIdentifier = database.saveDocument("content://books/older.epub", "older.epub")
+        val newestIdentifier = database.saveDocument("content://books/newest.epub", "newest.epub")
+        database.markDocumentOpened(olderIdentifier, 1_000L)
+        database.markDocumentOpened(newestIdentifier, 2_000L)
+
+        val currentlyReading = database.findCurrentlyReadingDocuments()
+
+        assertEquals(listOf(newestIdentifier, olderIdentifier), currentlyReading.map { it.identifier })
+        assertTrue(currentlyReading.none { it.identifier == unopenedIdentifier })
+    }
+
+    @Test
+    fun restoredInstallationAcceptsRemoteOpeningWithoutProgress() {
+        val documentIdentifier = database.saveDocument("content://books/opened-only.epub", "opened-only.epub")
+        val localMetadata = database.documentSyncMetadata(documentIdentifier)
+        val remoteLastOpenedAt = localMetadata.updatedAt - 20_000L
+        val remoteState = JSONObject().apply {
+            put("updatedAt", localMetadata.updatedAt - 10_000L)
+            put("progress", 0.0)
+            put("readerLocation", 0)
+            put("lastOpenedAt", remoteLastOpenedAt)
+            put("annotations", JSONArray())
+        }
+
+        database.mergeReadingState(listOf(documentIdentifier to remoteState))
+
+        assertEquals(remoteLastOpenedAt, requireNotNull(database.findDocument(documentIdentifier)).lastOpenedAt)
+        assertEquals(listOf(documentIdentifier), database.findCurrentlyReadingDocuments().map { it.identifier })
     }
 
     @Test
