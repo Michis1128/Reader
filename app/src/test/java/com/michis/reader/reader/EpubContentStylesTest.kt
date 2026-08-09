@@ -24,6 +24,9 @@ class EpubContentStylesTest {
         assertTrue(stylesheet.contains("class~=\"carta\""))
         assertTrue(stylesheet.contains("class~=\"cancion\""))
         assertTrue(stylesheet.contains("margin-inline-start: 6%"))
+        assertTrue(stylesheet.contains("font-style: italic !important"))
+        assertTrue(stylesheet.contains("blockquote *"))
+        assertTrue(stylesheet.contains("[epub\\:type~=\"z3998:letter\"] *"))
     }
 
     @Test
@@ -32,6 +35,8 @@ class EpubContentStylesTest {
 
         assertTrue(script.contains(EpubContentStyles.STYLE_ELEMENT_IDENTIFIER))
         assertTrue(script.contains("document.getElementById"))
+        assertTrue(script.contains("[epub\\\\:type"))
+        assertFalse(script.contains("style.textContent = `"))
         assertFalse(script.contains("document.body.innerHTML"))
     }
 }
