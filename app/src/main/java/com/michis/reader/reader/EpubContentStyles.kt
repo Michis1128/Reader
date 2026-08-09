@@ -52,12 +52,41 @@ internal object EpubContentStyles {
           margin-inline-start: 6% !important;
           margin-inline-end: 6% !important;
           font-size: 0.96em !important;
+          font-style: italic !important;
+        }
+
+        blockquote *,
+        [epub\:type~="z3998:letter"] *,
+        [epub\:type~="z3998:poem"] *,
+        [epub\:type~="z3998:song"] *,
+        [epub\:type~="epigraph"] *,
+        [epub\:type~="pullquote"] *,
+        [role="doc-epigraph"] *,
+        [class~="letter" i] *,
+        [class~="carta" i] *,
+        [class~="poem" i] *,
+        [class~="poema" i] *,
+        [class~="verse" i] *,
+        [class~="verso" i] *,
+        [class~="song" i] *,
+        [class~="cancion" i] *,
+        [class~="lyrics" i] *,
+        [class~="epigraph" i] *,
+        [class~="epigrafe" i] *,
+        [class~="excerpt" i] *,
+        [class~="extracto" i] *,
+        [class~="fragment" i] *,
+        [class~="fragmento" i] *,
+        [class~="quote" i] *,
+        [class~="cita" i] * {
+          font-style: italic !important;
         }
         """.trimIndent()
 
     val installationScript: String
-        get() =
-            """
+        get() {
+            val encodedStylesheet = stylesheet.toJavaScriptStringLiteral()
+            return """
             (() => {
               const identifier = '$STYLE_ELEMENT_IDENTIFIER';
               let style = document.getElementById(identifier);
@@ -66,7 +95,24 @@ internal object EpubContentStyles {
                 style.id = identifier;
                 (document.head || document.documentElement).appendChild(style);
               }
-              style.textContent = `${stylesheet}`;
+              style.textContent = $encodedStylesheet;
             })();
             """.trimIndent()
+        }
+
+    private fun String.toJavaScriptStringLiteral(): String = buildString(length + 2) {
+        append('"')
+        this@toJavaScriptStringLiteral.forEach { character ->
+            when (character) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\u2028' -> append("\\u2028")
+                '\u2029' -> append("\\u2029")
+                else -> append(character)
+            }
+        }
+        append('"')
+    }
 }
