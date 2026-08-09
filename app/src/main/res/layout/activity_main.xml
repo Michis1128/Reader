@@ -113,6 +113,15 @@
                 android:textSize="12sp" />
 
             <Button
+                android:id="@+id/currentlyReadingTabButton"
+                style="@style/Widget.MichisReader.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/ui_content_spacing_small"
+                android:text="@string/currently_reading_title"
+                android:textSize="12sp" />
+
+            <Button
                 android:id="@+id/quotesTabButton"
                 style="@style/Widget.MichisReader.Button"
                 android:layout_width="wrap_content"

@@ -21,6 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
+    private enum class MainSection { LIBRARY, CURRENTLY_READING, ANNOTATIONS, DICTIONARIES }
     private lateinit var database: ReaderDatabase
     private lateinit var documentList: LinearLayout
     private lateinit var emptyMessage: TextView
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var syncStatusText: TextView
     private lateinit var syncButton: Button
     private lateinit var libraryPathText: TextView
+    private var mainSection = MainSection.LIBRARY
     private val documentPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data ?: return@registerForActivityResult
         if (result.resultCode != RESULT_OK) return@registerForActivityResult
@@ -53,7 +55,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (::libraryBrowserState.isInitialized && libraryBrowserState.canNavigateBack) {
+                if (::libraryBrowserState.isInitialized && mainSection != MainSection.LIBRARY) {
+                    mainSection = MainSection.LIBRARY
+                    refreshLibrary()
+                } else if (::libraryBrowserState.isInitialized && libraryBrowserState.canNavigateBack) {
                     navigateToParentFolder()
                 } else {
                     isEnabled = false
@@ -76,10 +81,10 @@ class MainActivity : ComponentActivity() {
         documentActions = LibraryDocumentActions(this, database, { refreshLibrary() }) {
             syncStatusText.text = it
         }
-        librarySections = LibrarySectionsController(this, database, documentList, libraryPathText)
+        librarySections = LibrarySectionsController(this, database, documentList, libraryPathText, ::openReader)
         syncController = LibrarySyncController(
             this, syncStatusText, syncButton, ::showGeneralSettings
-        ) { refreshLibrary(searchInput.text?.toString().orEmpty()) }
+        ) { refreshCurrentSection(searchInput.text?.toString().orEmpty()) }
         SystemBarInsets.apply(mainScreen)
         setContentView(mainScreen)
         AppThemePalette.apply(this)
@@ -111,8 +116,9 @@ class MainActivity : ComponentActivity() {
         syncButton.setOnClickListener { syncController.synchronize() }
         binding.settingsButton.setOnClickListener { showGeneralSettings() }
         binding.importButton.setOnClickListener { showImportMenu() }
-        searchInput.addTextChangedListener(SimpleTextWatcher { refreshLibrary(it) })
+        searchInput.addTextChangedListener(SimpleTextWatcher(::refreshCurrentSection))
         binding.libraryTabButton.setOnClickListener { openLibraryRoot() }
+        binding.currentlyReadingTabButton.setOnClickListener { showCurrentlyReading() }
         binding.quotesTabButton.setOnClickListener { showAnnotations("cita") }
         binding.bookmarksTabButton.setOnClickListener { showAnnotations("marcador") }
         binding.dictionariesTabButton.setOnClickListener { showDictionaries() }
@@ -130,6 +136,9 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         AppThemePalette.apply(this)
         if (::syncController.isInitialized) syncController.refreshStatus()
+        if (::librarySections.isInitialized && mainSection == MainSection.CURRENTLY_READING) {
+            librarySections.showCurrentlyReading(searchInput.text?.toString().orEmpty())
+        }
     }
 
     private fun openDocumentPicker() {
@@ -166,7 +175,16 @@ class MainActivity : ComponentActivity() {
         AppThemePalette.apply(this)
     }
 
+    private fun refreshCurrentSection(query: String) {
+        when (mainSection) {
+            MainSection.LIBRARY -> refreshLibrary(query)
+            MainSection.CURRENTLY_READING -> librarySections.showCurrentlyReading(query)
+            MainSection.ANNOTATIONS, MainSection.DICTIONARIES -> Unit
+        }
+    }
+
     private fun openLibraryRoot() {
+        mainSection = MainSection.LIBRARY
         libraryBrowserState.openRoot(); libraryPathText.text = libraryBrowserState.pathLabel; refreshLibrary()
     }
 
@@ -219,9 +237,20 @@ class MainActivity : ComponentActivity() {
 
     private fun showDocumentActions(document: LibraryDocument) = documentActions.show(document)
 
-    private fun showAnnotations(kind: String) = librarySections.showAnnotations(kind)
+    private fun showCurrentlyReading() {
+        mainSection = MainSection.CURRENTLY_READING
+        librarySections.showCurrentlyReading(searchInput.text?.toString().orEmpty())
+    }
 
-    private fun showDictionaries() = librarySections.showDictionaries()
+    private fun showAnnotations(kind: String) {
+        mainSection = MainSection.ANNOTATIONS
+        librarySections.showAnnotations(kind)
+    }
+
+    private fun showDictionaries() {
+        mainSection = MainSection.DICTIONARIES
+        librarySections.showDictionaries()
+    }
     private fun showGeneralSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
@@ -231,6 +260,7 @@ class MainActivity : ComponentActivity() {
         if (!document.format.equals("EPUB", ignoreCase = true)) {
             Toast.makeText(this, "Michis Reader solo admite libros EPUB", Toast.LENGTH_SHORT).show(); return
         }
+        database.markDocumentOpened(identifier)
         startActivity(Intent(this, ReadiumEpubActivity::class.java).putExtra("document_identifier", identifier))
     }
 }

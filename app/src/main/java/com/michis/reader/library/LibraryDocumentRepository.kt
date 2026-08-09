@@ -47,6 +47,17 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
         ).use(::readDocuments)
     }
 
+    fun findCurrentlyReadingDocuments(query: String): List<LibraryDocument> {
+        val search = "%${query.trim()}%"
+        return database.readableDatabase.rawQuery(
+            "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at FROM documents " +
+                "WHERE format = 'EPUB' AND last_opened_at > 0 " +
+                "AND (title LIKE ? OR author LIKE ? OR file_name LIKE ?) " +
+                "ORDER BY last_opened_at DESC, title COLLATE NOCASE",
+            arrayOf(search, search, search)
+        ).use(::readDocuments)
+    }
+
     fun findDocumentsInFolder(folderRemoteIdentifier: String?, query: String): List<LibraryDocument> {
         if (query.isNotBlank()) return findDocuments(query)
         val condition = if (folderRemoteIdentifier == null) {
@@ -155,6 +166,18 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
                 put("progress", progress.coerceIn(0f, 1f))
                 put("last_opened_at", now)
                 put("updated_at", now)
+            },
+            "identifier = ?",
+            arrayOf(identifier.toString())
+        )
+    }
+
+    fun markDocumentOpened(identifier: Long, openedAt: Long = System.currentTimeMillis()) {
+        database.writableDatabase.update(
+            "documents",
+            ContentValues().apply {
+                put("last_opened_at", openedAt)
+                put("updated_at", openedAt)
             },
             "identifier = ?",
             arrayOf(identifier.toString())

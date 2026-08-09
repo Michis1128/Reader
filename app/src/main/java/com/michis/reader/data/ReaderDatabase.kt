@@ -176,6 +176,9 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun findDocuments(query: String = "") = libraryDocuments.findDocuments(query)
 
+    fun findCurrentlyReadingDocuments(query: String = "") =
+        libraryDocuments.findCurrentlyReadingDocuments(query)
+
     fun findDocumentsInFolder(folderRemoteIdentifier: String?, query: String = "") =
         libraryDocuments.findDocumentsInFolder(folderRemoteIdentifier, query)
 
@@ -222,6 +225,9 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun updateProgress(identifier: Long, location: Int, progress: Float) =
         libraryDocuments.updateProgress(identifier, location, progress)
+
+    fun markDocumentOpened(identifier: Long, openedAt: Long = System.currentTimeMillis()) =
+        libraryDocuments.markDocumentOpened(identifier, openedAt)
 
     fun addAnnotation(documentIdentifier: Long, kind: String, text: String, note: String, color: Int, location: Int, pageNumber: Int = 0) =
         annotationsRepository.addAnnotation(documentIdentifier, kind, text, note, color, location, pageNumber)
