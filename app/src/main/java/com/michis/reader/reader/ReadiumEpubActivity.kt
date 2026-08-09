@@ -225,7 +225,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 initialPreferences = currentPreferences,
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
                     override fun onPageLoaded() {
-                        applyTopAnchoredContent()
+                        applyContentStyles()
                     }
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
@@ -291,23 +291,13 @@ class ReadiumEpubActivity : FragmentActivity() {
         if (::navigator.isInitialized) navigator.submitPreferences(currentPreferences)
     }
 
-    private fun applyTopAnchoredContent() {
+    private fun applyContentStyles() {
         if (!::navigator.isInitialized) {
-            rootLayout.postDelayed(::applyTopAnchoredContent, 120)
+            rootLayout.postDelayed(::applyContentStyles, 120)
             return
         }
         lifecycleScope.launch {
-            navigator.evaluateJavascript(
-                """
-                (() => {
-                  const elements = [document.documentElement, document.body].filter(Boolean);
-                  elements.forEach(element => {
-                    element.style.setProperty('justify-content', 'flex-start', 'important');
-                    element.style.setProperty('align-content', 'start', 'important');
-                  });
-                })();
-                """.trimIndent()
-            )
+            navigator.evaluateJavascript(EpubContentStyles.installationScript)
         }
     }
 
