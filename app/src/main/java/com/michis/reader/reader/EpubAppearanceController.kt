@@ -134,7 +134,7 @@ internal class EpubAppearanceController(
         bottom: Float,
         left: Float
     ): String =
-        """
+        EpubContentStyles.installationScript + "\n" + """
         (() => {
           const elements = [document.documentElement, document.body].filter(Boolean);
           elements.forEach(element => {
