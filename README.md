@@ -1,36 +1,111 @@
 # Michis Reader
 
-Lector de libros EPUB para Android, desarrollado en Kotlin y basado en Readium Kotlin Toolkit.
+Un lector de EPUB para Android pensado para organizar una biblioteca personal y ofrecer una experiencia de lectura configurable, privada y sin cuentas obligatorias.
 
-## Funciones principales
+Michis Reader funciona de forma local y utiliza [Readium Kotlin Toolkit](https://github.com/readium/kotlin-toolkit) para abrir, navegar y conservar la posición dentro de los libros. La conexión con Google Drive es completamente opcional.
 
-- Apertura e importación exclusiva de libros EPUB.
-- Biblioteca local organizada en carpetas, con distintas vistas, búsqueda y edición de metadatos.
-- Lectura EPUB mediante Readium, con tabla de contenido, navegación, selección de texto y progreso automático.
-- Temas, tipografías, tamaño, grosor, interlineado, alineación, márgenes y modos rápidos de lectura.
-- Citas con colores, marcadores y diccionarios asociados a cada libro.
-- Sincronización incremental opcional con Google Drive de libros y estado de lectura por libro.
-- Compatibilidad opcional con acciones aéreas del S Pen.
-- Uso local sin cuenta obligatoria y sin telemetría.
+> **Estado del proyecto:** en desarrollo. Actualmente admite exclusivamente archivos EPUB y requiere Android 8.0 (API 26) o una versión posterior.
 
-## Abrir en Android Studio
+## Qué ofrece
 
-1. Abra Android Studio y seleccione **Open**.
-2. Seleccione la carpeta raíz `Reader`, que contiene `settings.gradle.kts`.
-3. Confirme **Trust Project** y espere la sincronización de Gradle.
-4. Si Android Studio lo solicita, instale Android SDK 36.
-5. Ejecute la aplicación en un dispositivo con Android 8.0 o posterior.
+### Biblioteca organizada
 
-El archivo `local.properties` contiene la ruta local del SDK y Android Studio puede regenerarlo. No debe compartirse ni almacenarse en el control de versiones.
+- Importación de archivos EPUB desde el dispositivo.
+- Carpetas, búsqueda, filtros y cuatro modos de visualización.
+- Orden por título, autor o una disposición personalizada por carpeta.
+- Portadas, edición de metadatos y acceso rápido al último libro leído.
+- Restauración de la carpeta o de la sesión de lectura al volver a abrir la app.
 
-## Paquetes principales
+### Lectura a tu manera
+
+- Tabla de contenido jerárquica y búsqueda de texto dentro del libro.
+- Navegación por toque, controles superpuestos y modo inmersivo.
+- Historial para regresar o avanzar entre saltos realizados en el libro.
+- Temas de lectura y cambio rápido entre dos temas configurados.
+- Ajustes globales de fuente, tamaño, grosor, interlineado, alineación y márgenes.
+- Lectura paginada o con desplazamiento, tanto en vertical como en horizontal.
+- Estimación de páginas adaptada a la configuración visual actual.
+
+### Herramientas para recordar y aprender
+
+- Citas resaltadas con color y notas propias.
+- Marcadores vinculados a la posición exacta de lectura.
+- Diccionarios por libro, con categorías y posibilidad de compartirlos entre varios libros.
+- Términos del diccionario resaltados directamente en el EPUB.
+- Acceso agrupado a citas, marcadores y diccionarios desde la biblioteca.
+
+### Sincronización opcional
+
+- Inicio de sesión con Google y autorización de Drive separados.
+- Selección de carpetas o EPUB concretos de Google Drive.
+- Sincronización incremental de libros, progreso, citas, marcadores y diccionarios.
+- Trabajo en segundo plano con opción de limitar la sincronización a Wi-Fi.
+- Resolución de cambios por libro y protección de elementos eliminados para que no reaparezcan desde otro dispositivo.
+
+La app sigue siendo plenamente utilizable sin iniciar sesión y sin conexión. Los documentos locales no se envían a servicios del desarrollador.
+
+### S Pen
+
+En dispositivos Samsung compatibles, las acciones aéreas del S Pen pueden asignarse a tareas como cambiar de página, alternar el tema, modificar el tamaño del texto, crear un marcador o guardar una selección como cita o término de diccionario.
+
+## Alcance
+
+Michis Reader está dedicado exclusivamente a la lectura de EPUB. No incorpora lectores de PDF, DOCX, MOBI u otros formatos, ni funciones de texto a voz.
+
+## Ejecutar el proyecto
+
+### Requisitos
+
+- Android Studio con soporte para Android SDK 36.
+- Un dispositivo o emulador con Android 8.0 o posterior.
+- JDK compatible con Android Gradle Plugin 9.2.1.
+
+### Desde Android Studio
+
+1. Clona o descarga el repositorio.
+2. En Android Studio, selecciona **Open** y abre la carpeta raíz del proyecto.
+3. Confirma **Trust Project** y espera a que termine la sincronización de Gradle.
+4. Instala Android SDK 36 si Android Studio lo solicita.
+5. Selecciona un dispositivo y ejecuta el módulo `app`.
+
+`local.properties` contiene la ruta local del SDK. Android Studio puede crearlo o regenerarlo y no debe añadirse al control de versiones.
+
+### Validación desde la terminal
+
+En Windows:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:compileDebugKotlin
+```
+
+En macOS o Linux:
+
+```bash
+./gradlew :app:testDebugUnitTest
+./gradlew :app:compileDebugKotlin
+```
+
+## Tecnología
+
+- Kotlin y Android Views con XML/View Binding.
+- Readium Kotlin Toolkit 3.2.0 para el lector EPUB.
+- SQLite para la biblioteca, el progreso y las anotaciones.
+- WorkManager para la sincronización en segundo plano.
+- Credential Manager y Google Drive para la cuenta y sincronización opcionales.
+- KvColorPicker Android para colores personalizados.
+- JUnit y Robolectric para pruebas automatizadas.
+
+## Organización del código
+
+El proyecto contiene un único módulo Android, `app`. Sus áreas principales son:
 
 - `app`: entrada de la aplicación y restauración de la última pantalla.
-- `reader`: lector, navegación, decoración y configuración EPUB.
-- `library`: importación, organización, portadas y presentación de la biblioteca.
-- `annotations` y `dictionary`: citas, colores y diccionarios de los libros.
-- `data`: base de datos y modelos persistentes.
-- `sync` y `sync.drive`: sincronización, autorización y acceso opcional a Google Drive.
-- `settings`, `theme`, `spen` y `ui`: preferencias y componentes compartidos de interfaz.
+- `reader`: apertura, navegación, búsqueda y apariencia del EPUB.
+- `library`: importación, carpetas, portadas y representación de la biblioteca.
+- `annotations` y `dictionary`: citas, marcadores y diccionarios.
+- `data`: base de datos y persistencia.
+- `sync` y `sync.drive`: sincronización incremental y conexión opcional con Google Drive.
+- `settings`, `theme`, `spen` y `ui`: preferencias y componentes compartidos.
 
-La primera sincronización establece un cursor de cambios de Drive y migra automáticamente el respaldo histórico `library-state.json`. Las siguientes consultas descargan únicamente EPUB modificados y estados JSON por libro. Al cerrar el lector se encola solo el último libro, respetando la preferencia de Wi‑Fi o datos móviles.
+Antes de contribuir, consulta [`AGENTS.md`](AGENTS.md), que documenta la arquitectura, los comportamientos que deben conservarse y la validación esperada para los cambios.
