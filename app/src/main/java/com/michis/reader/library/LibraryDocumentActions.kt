@@ -17,8 +17,13 @@ internal class LibraryDocumentActions(
     private val updateSyncStatus: (String) -> Unit
 ) {
     fun show(document: LibraryDocument) {
+        val resetLabel = if (document.lastOpenedAt > 0L) {
+            "Reiniciar libro (también quitar de Leyendo actualmente)"
+        } else {
+            "Reiniciar libro"
+        }
         AlertDialog.Builder(activity).setTitle(document.title)
-            .setItems(arrayOf("Editar metadatos", "Reiniciar libro", "Eliminar de la biblioteca")) { _, option ->
+            .setItems(arrayOf("Editar metadatos", resetLabel, "Eliminar de la biblioteca")) { _, option ->
                 when (option) {
                     0 -> editMetadata(document)
                     1 -> confirmReset(document)
@@ -32,6 +37,7 @@ internal class LibraryDocumentActions(
             .setMessage(
                 "Se borrarán el progreso, citas, notas, marcadores y diccionarios de " +
                     "\"${document.title}\". El libro y sus metadatos se conservarán. " +
+                    (if (document.lastOpenedAt > 0L) "También desaparecerá de Leyendo actualmente. " else "") +
                     "El cambio también se sincronizará con Drive."
             )
             .setPositiveButton("Reiniciar") { _, _ ->

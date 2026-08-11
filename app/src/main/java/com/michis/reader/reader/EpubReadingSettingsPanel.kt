@@ -33,7 +33,8 @@ class EpubReadingSettingsPanel(
     private val submitPreferences: (EpubPreferences) -> Unit,
     private val selectTheme: (Int) -> Unit,
     private val selectFont: () -> Unit,
-    private val closePanel: () -> Unit
+    private val closePanel: () -> Unit,
+    private val themeOptionsVisibilityChanged: (Boolean) -> Unit
 ) {
     private lateinit var familyContainer: LinearLayout
     private val visibilityBeforeThemeSelection = mutableMapOf<View, Int>()
@@ -88,6 +89,7 @@ class EpubReadingSettingsPanel(
                     keepPopupOpenOnSelection = true
                     onPopupVisibilityChanged = { visible ->
                         setThemeSelectionFocus(this, themeLabel, visible)
+                        themeOptionsVisibilityChanged(visible)
                     }
                 }
                 addView(themeSpinner)

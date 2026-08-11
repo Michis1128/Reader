@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
@@ -88,6 +89,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var sliderJumpOriginPage: Int? = null
     private lateinit var spenRemoteController: SpenRemoteController
     private lateinit var spenActionController: SpenReaderActionController
+    private val pendingExtendedQuoteParts = mutableListOf<ExtendedQuotePart>()
     private var sessionController: ReaderSessionController? = null
     private var pagePositions = emptyList<org.readium.r2.shared.publication.Locator>()
 
@@ -279,7 +281,10 @@ class ReadiumEpubActivity : FragmentActivity() {
         submitPreferences = appearanceController::submit,
         selectTheme = appearanceController::applyReadingTheme,
         selectFont = appearanceController::showFontSelection,
-        closePanel = { settingsPanel.visibility = View.GONE }
+        closePanel = { settingsPanel.visibility = View.GONE },
+        themeOptionsVisibilityChanged = { optionsVisible ->
+            settingsPanel.visibility = if (optionsVisible) View.INVISIBLE else View.VISIBLE
+        }
     ).create()
 
     private fun buildSearchPanel(): View {
@@ -373,8 +378,15 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun selectionActions() = object : ActionMode.Callback {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-            menu.add(0, ACTION_ADD_QUOTE, 0, "Cita")
-            menu.add(0, ACTION_ADD_DICTIONARY, 1, "Diccionario")
+            if (pendingExtendedQuoteParts.isEmpty()) {
+                menu.add(0, ACTION_ADD_QUOTE, 0, "Cita")
+                menu.add(0, ACTION_START_EXTENDED_QUOTE, 1, "Cita extensa")
+            } else {
+                menu.add(0, ACTION_FINISH_EXTENDED_QUOTE, 0, "Finalizar cita")
+                menu.add(0, ACTION_CONTINUE_EXTENDED_QUOTE, 1, "Continuar cita")
+                menu.add(0, ACTION_CANCEL_EXTENDED_QUOTE, 2, "Cancelar cita extensa")
+            }
+            menu.add(0, ACTION_ADD_DICTIONARY, 3, "Diccionario")
             menu.add(0, ACTION_COPY, 10, "Copiar")
             menu.add(0, ACTION_SEARCH, 11, "Buscar")
             menu.add(0, ACTION_TRANSLATE, 12, "Traducir")
@@ -383,14 +395,45 @@ class ReadiumEpubActivity : FragmentActivity() {
         }
         override fun onPrepareActionMode(mode: ActionMode, menu: Menu) = false
         override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            if (item.itemId !in setOf(ACTION_ADD_QUOTE, ACTION_ADD_DICTIONARY, ACTION_COPY, ACTION_SEARCH, ACTION_TRANSLATE, ACTION_SHARE)) return false
+            if (item.itemId !in setOf(
+                    ACTION_ADD_QUOTE, ACTION_START_EXTENDED_QUOTE, ACTION_FINISH_EXTENDED_QUOTE,
+                    ACTION_CONTINUE_EXTENDED_QUOTE, ACTION_CANCEL_EXTENDED_QUOTE,
+                    ACTION_ADD_DICTIONARY, ACTION_COPY, ACTION_SEARCH, ACTION_TRANSLATE, ACTION_SHARE
+                )
+            ) return false
             lifecycleScope.launch {
+                if (item.itemId == ACTION_CANCEL_EXTENDED_QUOTE) {
+                    pendingExtendedQuoteParts.clear()
+                    navigator.clearSelection()
+                    mode.finish()
+                    Toast.makeText(this@ReadiumEpubActivity, "Cita extensa cancelada", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
                 val selection = navigator.currentSelection() ?: return@launch
                 val selectedText = selection.locator.text.highlight.orEmpty().trim()
                 if (selectedText.isNotBlank()) {
                     when (item.itemId) {
                         ACTION_ADD_QUOTE -> {
-                            openQuoteColorPicker(selectedText, selection.locator)
+                            openQuoteColorPicker(selectedText, listOf(selection.locator))
+                        }
+                        ACTION_START_EXTENDED_QUOTE, ACTION_CONTINUE_EXTENDED_QUOTE -> {
+                            if (!appendExtendedQuotePart(selectedText, selection.locator)) return@launch
+                            navigator.clearSelection()
+                            mode.finish()
+                            navigateOnePage(1)
+                            Toast.makeText(
+                                this@ReadiumEpubActivity,
+                                "Selecciona la continuación y elige Finalizar cita o Continuar cita",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            return@launch
+                        }
+                        ACTION_FINISH_EXTENDED_QUOTE -> {
+                            if (!appendExtendedQuotePart(selectedText, selection.locator)) return@launch
+                            val quoteText = pendingExtendedQuoteParts.joinToString("\n") { it.text }
+                            val locators = pendingExtendedQuoteParts.map { it.locator }
+                            pendingExtendedQuoteParts.clear()
+                            openQuoteColorPicker(quoteText, locators)
                         }
                         ACTION_ADD_DICTIONARY -> {
                             launchReaderMenu(Intent(this@ReadiumEpubActivity, DictionaryActivity::class.java)
@@ -465,12 +508,27 @@ class ReadiumEpubActivity : FragmentActivity() {
         panelCoordinator.close(ReaderPanel.SEARCH)
     }
 
-    private fun openQuoteColorPicker(selectedText: String, locator: org.readium.r2.shared.publication.Locator) {
+    private fun appendExtendedQuotePart(selectedText: String, locator: Locator): Boolean {
+        if (selectedText.length > MAX_EXTENDED_QUOTE_PART_LENGTH) {
+            Toast.makeText(
+                this,
+                "La selección parece abarcar demasiado contenido. Reduce el tramo para evitar seleccionar el capítulo completo.",
+                Toast.LENGTH_LONG
+            ).show()
+            return false
+        }
+        pendingExtendedQuoteParts += ExtendedQuotePart(selectedText, locator)
+        return true
+    }
+
+    private fun openQuoteColorPicker(selectedText: String, locators: List<Locator>) {
+        val firstLocator = locators.firstOrNull() ?: return
+        val locatorJson = JSONArray().apply { locators.forEach { put(it.toJSON()) } }.toString()
         launchReaderMenu(Intent(this, QuoteColorActivity::class.java)
             .putExtra(QuoteColorActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
             .putExtra(QuoteColorActivity.EXTRA_TEXT, selectedText)
-            .putExtra(QuoteColorActivity.EXTRA_LOCATION, locator.locations.position ?: 0)
-            .putExtra(QuoteColorActivity.EXTRA_LOCATOR_JSON, locator.toJSON().toString())
+            .putExtra(QuoteColorActivity.EXTRA_LOCATION, firstLocator.locations.position ?: 0)
+            .putExtra(QuoteColorActivity.EXTRA_LOCATOR_JSON, locatorJson)
             .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, progressSlider.progress + 1))
     }
 
@@ -573,7 +631,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
                 .putExtra(DictionaryActivity.EXTRA_SELECTED_TEXT, selectedText)
                 .putExtra(DictionaryActivity.EXTRA_SELECTED_CONTEXT, selection?.locator?.text?.before.orEmpty()))
-            else selection?.locator?.let { openQuoteColorPicker(selectedText, it) }
+            else selection?.locator?.let { openQuoteColorPicker(selectedText, listOf(it)) }
         }
     }
 
@@ -744,7 +802,14 @@ class ReadiumEpubActivity : FragmentActivity() {
         private const val ACTION_SEARCH = 0x4223
         private const val ACTION_TRANSLATE = 0x4224
         private const val ACTION_SHARE = 0x4225
+        private const val ACTION_START_EXTENDED_QUOTE = 0x4226
+        private const val ACTION_CONTINUE_EXTENDED_QUOTE = 0x4227
+        private const val ACTION_FINISH_EXTENDED_QUOTE = 0x4228
+        private const val ACTION_CANCEL_EXTENDED_QUOTE = 0x4229
+        private const val MAX_EXTENDED_QUOTE_PART_LENGTH = 6_000
         private const val MENU_SURFACE_TAG = "reader_menu_surface"
         private const val MENU_CARD_TAG = "reader_menu_card"
     }
+
+    private data class ExtendedQuotePart(val text: String, val locator: Locator)
 }
