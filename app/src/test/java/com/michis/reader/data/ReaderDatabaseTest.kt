@@ -63,6 +63,32 @@ class ReaderDatabaseTest {
     }
 
     @Test
+    fun quotePreservesReadiumLocatorLocallyAndWhenMergedFromDrive() {
+        val localDocumentIdentifier = database.saveDocument("content://books/locator.epub", "locator.epub")
+        val locatorJson = """{"href":"chapter.xhtml","type":"application/xhtml+xml","locations":{"fragments":["epubcfi(/6/4!/4/2,/1:0,/1:42)"]}}"""
+        database.addAnnotation(
+            localDocumentIdentifier, "cita", "Una cita larga", "", 0xFFFFCC00.toInt(), 12, 3, locatorJson
+        )
+
+        assertEquals(locatorJson, database.annotations(localDocumentIdentifier).single().locatorJson)
+
+        val remoteDocumentIdentifier = database.saveDocument("content://books/remote-locator.epub", "remote-locator.epub")
+        val remoteState = JSONObject().apply {
+            put("updatedAt", System.currentTimeMillis())
+            put("annotations", JSONArray().put(JSONObject().apply {
+                put("syncId", "remote-quote-with-locator")
+                put("updatedAt", System.currentTimeMillis())
+                put("kind", "cita")
+                put("selectedText", "Otra cita larga")
+                put("locatorJson", locatorJson)
+            }))
+        }
+        database.mergeReadingState(listOf(remoteDocumentIdentifier to remoteState))
+
+        assertEquals(locatorJson, database.annotations(remoteDocumentIdentifier).single().locatorJson)
+    }
+
+    @Test
     fun resetBookIsNotUndoneByOlderRemoteState() {
         val documentIdentifier = database.saveDocument("content://books/reset-sync.epub", "reset-sync.epub")
         database.updateProgress(documentIdentifier, location = 220, progress = 0.55f)

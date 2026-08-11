@@ -24,7 +24,11 @@ class LimitedHeightSpinner @JvmOverloads constructor(
     defaultStyleAttribute: Int = android.R.attr.spinnerStyle
 ) : Spinner(context, attributes, defaultStyleAttribute, MODE_DROPDOWN) {
     private var optionsPopup: PopupWindow? = null
+    private var optionsList: ListView? = null
     private var touchStartedAt = 0L
+
+    var keepPopupOpenOnSelection: Boolean = false
+    var onPopupVisibilityChanged: ((Boolean) -> Unit)? = null
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -47,31 +51,53 @@ class LimitedHeightSpinner @JvmOverloads constructor(
         optionsPopup?.dismiss()
 
         val activity = context as? android.app.Activity ?: return super.performClick()
-        val palette = AppThemePalette.current(activity)
         val rowHeight = dp(52)
         val visibleRows = minOf(currentAdapter.count, MAX_VISIBLE_OPTIONS)
         val list = ListView(context).apply {
-            adapter = PopupOptionsAdapter(currentAdapter, palette.surface)
             choiceMode = ListView.CHOICE_MODE_SINGLE
             setItemChecked(selectedItemPosition, true)
-            divider = ColorDrawable(palette.outline)
             dividerHeight = maxOf(1, dp(1))
-            setBackgroundColor(palette.surface)
             isVerticalScrollBarEnabled = currentAdapter.count > MAX_VISIBLE_OPTIONS
             setOnItemClickListener { _, _, position, _ ->
                 this@LimitedHeightSpinner.setSelection(position)
-                optionsPopup?.dismiss()
+                setItemChecked(position, true)
+                if (keepPopupOpenOnSelection) refreshOpenPopupTheme() else optionsPopup?.dismiss()
             }
         }
+        optionsList = list
+        styleOptionsList(list, currentAdapter)
         val popupHeight = rowHeight * visibleRows + dp(maxOf(0, visibleRows - 1))
         optionsPopup = PopupWindow(list, maxOf(width, dp(220)), popupHeight, true).apply {
             setBackgroundDrawable(AppThemePalette.cardBackground(activity, 12f))
             isOutsideTouchable = true
             elevation = dp(8).toFloat()
-            setOnDismissListener { optionsPopup = null }
+            setOnDismissListener {
+                optionsPopup = null
+                optionsList = null
+                onPopupVisibilityChanged?.invoke(false)
+            }
             showAsDropDown(this@LimitedHeightSpinner, 0, dp(2), Gravity.START)
         }
+        onPopupVisibilityChanged?.invoke(true)
         return true
+    }
+
+    fun refreshOpenPopupTheme() {
+        val list = optionsList ?: return
+        val currentAdapter = adapter ?: return
+        styleOptionsList(list, currentAdapter)
+        val activity = context as? android.app.Activity ?: return
+        optionsPopup?.setBackgroundDrawable(AppThemePalette.cardBackground(activity, 12f))
+        optionsPopup?.update()
+    }
+
+    private fun styleOptionsList(list: ListView, currentAdapter: SpinnerAdapter) {
+        val activity = context as? android.app.Activity ?: return
+        val palette = AppThemePalette.current(activity)
+        list.adapter = PopupOptionsAdapter(currentAdapter, palette.surface)
+        list.divider = ColorDrawable(palette.outline)
+        list.setBackgroundColor(palette.surface)
+        list.setItemChecked(selectedItemPosition, true)
     }
 
     override fun onDetachedFromWindow() {

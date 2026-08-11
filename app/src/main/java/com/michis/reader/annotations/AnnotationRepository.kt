@@ -15,7 +15,8 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         note: String,
         color: Int,
         location: Int,
-        pageNumber: Int
+        pageNumber: Int,
+        locatorJson: String
     ) {
         val now = System.currentTimeMillis()
         database.writableDatabase.insert("annotations", null, ContentValues().apply {
@@ -26,6 +27,7 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
             put("color", color)
             put("location", location)
             put("page_number", pageNumber)
+            put("locator_json", locatorJson)
             put("created_at", now)
             put("order_position", nextPosition("annotations"))
             put("sync_id", UUID.randomUUID().toString())
@@ -37,7 +39,7 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
         val condition = if (documentIdentifier == null) "" else "WHERE document_identifier = ?"
         return database.readableDatabase.rawQuery(
             "SELECT identifier, document_identifier, kind, selected_text, note, color, location, " +
-                "page_number, created_at, order_position FROM annotations $condition " +
+                "page_number, created_at, order_position, locator_json FROM annotations $condition " +
                 "ORDER BY order_position, created_at",
             documentIdentifier?.let { arrayOf(it.toString()) }
         ).use { cursor ->
@@ -46,7 +48,7 @@ internal class AnnotationRepository(private val database: SQLiteOpenHelper) {
                     SavedAnnotation(
                         cursor.getLong(0), cursor.getLong(1), cursor.getString(2), cursor.getString(3),
                         cursor.getString(4), cursor.getInt(5), cursor.getInt(6), cursor.getInt(7),
-                        cursor.getLong(8), cursor.getInt(9)
+                        cursor.getLong(8), cursor.getInt(9), cursor.getString(10)
                     )
                 )
             }

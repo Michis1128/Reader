@@ -66,7 +66,8 @@ class QuoteColorActivity : ComponentActivity() {
                     binding.noteInput.text.toString(),
                     selectedColor,
                     intent.getIntExtra(EXTRA_LOCATION, 0),
-                    intent.getIntExtra(EXTRA_PAGE_NUMBER, 0)
+                    intent.getIntExtra(EXTRA_PAGE_NUMBER, 0),
+                    intent.getStringExtra(EXTRA_LOCATOR_JSON).orEmpty()
                 )
             } else {
                 database.updateQuote(existingQuote.identifier, binding.noteInput.text.toString(), selectedColor)
@@ -97,6 +98,7 @@ class QuoteColorActivity : ComponentActivity() {
         const val EXTRA_TEXT = "selected_text"
         const val EXTRA_LOCATION = "location"
         const val EXTRA_PAGE_NUMBER = "page_number"
+        const val EXTRA_LOCATOR_JSON = "locator_json"
         const val EXTRA_QUOTE_IDENTIFIER = "quote_identifier"
     }
 }

@@ -78,10 +78,12 @@ class MainActivity : ComponentActivity() {
         importCoordinator = LibraryImportCoordinator(
             contentResolver, database, { refreshLibrary() }, ::openReader
         ) { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
-        documentActions = LibraryDocumentActions(this, database, { refreshLibrary() }) {
+        documentActions = LibraryDocumentActions(this, database, {
+            refreshCurrentSection(searchInput.text?.toString().orEmpty())
+        }) {
             syncStatusText.text = it
         }
-        librarySections = LibrarySectionsController(this, database, documentList, libraryPathText, ::openReader)
+        librarySections = LibrarySectionsController(this, database, documentList, libraryPathText)
         syncController = LibrarySyncController(
             this, syncStatusText, syncButton, ::showGeneralSettings
         ) { refreshCurrentSection(searchInput.text?.toString().orEmpty()) }
@@ -137,7 +139,7 @@ class MainActivity : ComponentActivity() {
         AppThemePalette.apply(this)
         if (::syncController.isInitialized) syncController.refreshStatus()
         if (::librarySections.isInitialized && mainSection == MainSection.CURRENTLY_READING) {
-            librarySections.showCurrentlyReading(searchInput.text?.toString().orEmpty())
+            refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
         }
     }
 
@@ -178,7 +180,7 @@ class MainActivity : ComponentActivity() {
     private fun refreshCurrentSection(query: String) {
         when (mainSection) {
             MainSection.LIBRARY -> refreshLibrary(query)
-            MainSection.CURRENTLY_READING -> librarySections.showCurrentlyReading(query)
+            MainSection.CURRENTLY_READING -> refreshCurrentlyReading(query)
             MainSection.ANNOTATIONS, MainSection.DICTIONARIES -> Unit
         }
     }
@@ -207,7 +209,8 @@ class MainActivity : ComponentActivity() {
 
     private fun cycleLibraryDisplayMode() {
         libraryBrowserState.cycleDisplayMode()
-        libraryDisplayButton.text = displayModeIcon(); refreshLibrary()
+        libraryDisplayButton.text = displayModeIcon()
+        refreshCurrentSection(searchInput.text?.toString().orEmpty())
     }
 
     private fun displayModeIcon() = libraryBrowserState.displayModeIcon()
@@ -239,7 +242,28 @@ class MainActivity : ComponentActivity() {
 
     private fun showCurrentlyReading() {
         mainSection = MainSection.CURRENTLY_READING
-        librarySections.showCurrentlyReading(searchInput.text?.toString().orEmpty())
+        refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
+    }
+
+    private fun refreshCurrentlyReading(query: String) {
+        documentList.removeAllViews()
+        libraryPathText.visibility = View.GONE
+        val documents = database.findCurrentlyReadingDocuments(query)
+        if (documents.isEmpty()) {
+            emptyMessage.text = if (query.isBlank()) {
+                "Los libros que abras aparecerán aquí, empezando por el más reciente."
+            } else {
+                "No hay lecturas recientes que coincidan con la búsqueda."
+            }
+            documentList.addView(emptyMessage)
+        }
+        libraryViewRenderer.render(
+            documents.map(LibraryItem::Document),
+            libraryBrowserState.displayMode,
+            showParentFolder = false,
+            allowCustomOrdering = false
+        )
+        AppThemePalette.apply(this)
     }
 
     private fun showAnnotations(kind: String) {

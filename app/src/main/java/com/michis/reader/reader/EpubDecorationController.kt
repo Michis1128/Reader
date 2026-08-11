@@ -12,6 +12,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.yield
+import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -170,22 +171,54 @@ class EpubDecorationController(
         database.annotations(documentIdentifier)
             .filter { it.kind == "cita" && it.selectedText.isNotBlank() }
             .forEach { quote ->
-                val iterator = opened.search(
-                    quote.selectedText,
-                    SearchService.Options(caseSensitive = true, wholeWord = false, exact = true)
-                ) ?: return@forEach
-                val locators = mutableListOf<Locator>()
-                iterator.forEach { result -> locators += result.locators }
-                iterator.close()
-                val locator = locators.firstOrNull { it.locations.position == quote.location } ?: locators.firstOrNull()
-                if (locator != null) decorations += Decoration(
-                    id = "quote-${quote.identifier}",
-                    locator = locator,
-                    style = Decoration.Style.Highlight(quote.color, false),
-                    extras = mapOf(QUOTE_IDENTIFIER_EXTRA to quote.identifier)
-                )
+                val savedLocator = quote.locatorJson.takeIf(String::isNotBlank)?.let { json ->
+                    runCatching { Locator.fromJSON(JSONObject(json)) }.getOrNull()
+                }
+                if (savedLocator != null) {
+                    decorations += quoteDecoration(quote, savedLocator)
+                    return@forEach
+                }
+                quoteSearchFragments(quote.selectedText).forEachIndexed { fragmentIndex, fragment ->
+                    val iterator = opened.search(
+                        fragment,
+                        SearchService.Options(caseSensitive = true, wholeWord = false, exact = true)
+                    ) ?: return@forEachIndexed
+                    val locators = mutableListOf<Locator>()
+                    try {
+                        iterator.forEach { result -> locators += result.locators }
+                    } finally {
+                        iterator.close()
+                    }
+                    val locator = locators.firstOrNull { it.locations.position == quote.location }
+                        ?: locators.firstOrNull()
+                    if (locator != null) decorations += quoteDecoration(quote, locator, fragmentIndex)
+                }
             }
         targetNavigator.applyDecorations(decorations, QUOTE_GROUP)
+    }
+
+    private fun quoteDecoration(quote: SavedAnnotation, locator: Locator, fragmentIndex: Int? = null) = Decoration(
+        id = "quote-${quote.identifier}${fragmentIndex?.let { "-$it" }.orEmpty()}",
+        locator = locator,
+        style = Decoration.Style.Highlight(quote.color, false),
+        extras = mapOf(QUOTE_IDENTIFIER_EXTRA to quote.identifier)
+    )
+
+    private fun quoteSearchFragments(text: String): List<String> {
+        val normalized = text.replace(Regex("\\s+"), " ").trim()
+        if (normalized.length <= MAX_LEGACY_QUOTE_SEARCH_LENGTH) return listOf(normalized)
+        val fragments = mutableListOf<String>()
+        val current = StringBuilder()
+        normalized.split(' ').forEach { word ->
+            if (current.isNotEmpty() && current.length + word.length + 1 > MAX_LEGACY_QUOTE_SEARCH_LENGTH) {
+                fragments += current.toString()
+                current.clear()
+            }
+            if (current.isNotEmpty()) current.append(' ')
+            current.append(word)
+        }
+        if (current.isNotEmpty()) fragments += current.toString()
+        return fragments
     }
 
     private companion object {
@@ -194,5 +227,6 @@ class EpubDecorationController(
         const val SEARCH_GROUP = "book_search"
         const val ENTRY_IDENTIFIER_EXTRA = "dictionary_entry_identifier"
         const val QUOTE_IDENTIFIER_EXTRA = "quote_identifier"
+        const val MAX_LEGACY_QUOTE_SEARCH_LENGTH = 180
     }
 }

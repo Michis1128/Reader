@@ -46,7 +46,8 @@ class LibrarySyncSnapshotBuilder(
                 .put("location", annotation.location)
                 .put("pageNumber", annotation.pageNumber)
                 .put("createdAt", annotation.createdAt)
-                .put("orderPosition", annotation.orderPosition))
+                .put("orderPosition", annotation.orderPosition)
+                .put("locatorJson", annotation.locatorJson))
             }
 
             val categoriesJson = JSONArray()

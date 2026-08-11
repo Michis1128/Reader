@@ -36,6 +36,7 @@ class EpubReadingSettingsPanel(
     private val closePanel: () -> Unit
 ) {
     private lateinit var familyContainer: LinearLayout
+    private val visibilityBeforeThemeSelection = mutableMapOf<View, Int>()
 
     fun create(): View {
         val panelBinding = PanelEpubSettingsBinding.inflate(activity.layoutInflater)
@@ -69,8 +70,27 @@ class EpubReadingSettingsPanel(
                 })
             })
             addView(family("Tema y página") {
-                addView(label("Tema"))
-                addView(spinner(ReadingThemePalette.names, ReadingThemePalette.names.indexOf(settings.theme).coerceAtLeast(0), selectTheme))
+                val themeLabel = label("Tema")
+                addView(themeLabel)
+                val themeSpinner = spinner(
+                    ReadingThemePalette.names,
+                    ReadingThemePalette.names.indexOf(settings.theme).coerceAtLeast(0)
+                ) { index ->
+                    selectTheme(index)
+                    familyContainer.findViewWithTag<LimitedHeightSpinner>(THEME_SPINNER_TAG)?.let { spinner ->
+                        spinner.post {
+                            AppThemePalette.apply(activity)
+                            spinner.refreshOpenPopupTheme()
+                        }
+                    }
+                }.apply {
+                    tag = THEME_SPINNER_TAG
+                    keepPopupOpenOnSelection = true
+                    onPopupVisibilityChanged = { visible ->
+                        setThemeSelectionFocus(this, themeLabel, visible)
+                    }
+                }
+                addView(themeSpinner)
                 addView(label("Cambio de página"))
                 addView(spinner(arrayOf("Paginado", "Desplazamiento continuo"), if (settings.continuousScroll) 1 else 0) { index ->
                     settings.continuousScroll = index == 1
@@ -151,6 +171,32 @@ class EpubReadingSettingsPanel(
         return panelBinding.root
     }
 
+    private fun setThemeSelectionFocus(themeSpinner: View, themeLabel: View, focused: Boolean) {
+        if (!focused) {
+            visibilityBeforeThemeSelection.forEach { (view, visibility) -> view.visibility = visibility }
+            visibilityBeforeThemeSelection.clear()
+            return
+        }
+        visibilityBeforeThemeSelection.clear()
+        repeat(familyContainer.childCount) { familyIndex ->
+            val family = familyContainer.getChildAt(familyIndex)
+            if (family.findViewWithTag<View>(THEME_SPINNER_TAG) == null) {
+                visibilityBeforeThemeSelection[family] = family.visibility
+                family.visibility = View.GONE
+                return@repeat
+            }
+            val content = family.findViewById<android.view.ViewGroup>(com.michis.reader.R.id.familyContent)
+                ?: return@repeat
+            repeat(content.childCount) { childIndex ->
+                val child = content.getChildAt(childIndex)
+                if (child !== themeSpinner && child !== themeLabel) {
+                    visibilityBeforeThemeSelection[child] = child.visibility
+                    child.visibility = View.GONE
+                }
+            }
+        }
+    }
+
     private fun numberStepper(initial: Double, minimum: Double, maximum: Double, step: Double, changed: (Double) -> Unit): View {
         var value = initial.coerceIn(minimum, maximum)
         val binding = ViewNumberStepperBinding.inflate(activity.layoutInflater)
@@ -214,6 +260,10 @@ class EpubReadingSettingsPanel(
 
     private fun format(value: Double) = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
     private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val THEME_SPINNER_TAG = "reader_theme_spinner"
+    }
 
 }
 

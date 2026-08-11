@@ -21,7 +21,8 @@ data class LibraryFolder(val remoteIdentifier: String, val parentRemoteIdentifie
 data class SavedAnnotation(
     val identifier: Long, val documentIdentifier: Long, val kind: String,
     val selectedText: String, val note: String, val color: Int,
-    val location: Int, val pageNumber: Int, val createdAt: Long, val orderPosition: Int
+    val location: Int, val pageNumber: Int, val createdAt: Long, val orderPosition: Int,
+    val locatorJson: String
 )
 
 data class DictionaryCategory(val identifier: Long, val documentIdentifier: Long, val name: String)
@@ -50,7 +51,7 @@ data class PendingSyncDeletion(val entityType: String, val syncIdentifier: Strin
 data class DeletionMergeResult(val appliedDeletions: Int, val ignoredLocalNewer: Int, val alreadyAbsent: Int)
 data class BookResetResult(val annotationsDeleted: Int, val dictionaryEntriesDeleted: Int, val dictionaryCategoriesDeleted: Int)
 
-class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 9) {
+class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 10) {
     private val libraryDocuments by lazy { LibraryDocumentRepository(this) }
     private val annotationsRepository by lazy { AnnotationRepository(this) }
     private val dictionaries by lazy { DictionaryRepository(this) }
@@ -76,6 +77,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             color INTEGER NOT NULL DEFAULT 0, location INTEGER NOT NULL DEFAULT 0,
             page_number INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL, order_position INTEGER NOT NULL DEFAULT 0,
+            locator_json TEXT NOT NULL DEFAULT '',
             sync_id TEXT NOT NULL UNIQUE, updated_at INTEGER NOT NULL,
             FOREIGN KEY(document_identifier) REFERENCES documents(identifier) ON DELETE CASCADE)""")
         database.execSQL("CREATE INDEX annotations_document_index ON annotations(document_identifier)")
@@ -106,6 +108,11 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             createLibraryFoldersTable(database)
         }
         if (oldVersion < 9) database.execSQL("DROP TABLE IF EXISTS vocabulary")
+        if (oldVersion < 10 && hasTable(database, "annotations") &&
+            !hasColumn(database, "annotations", "locator_json")
+        ) {
+            database.execSQL("ALTER TABLE annotations ADD COLUMN locator_json TEXT NOT NULL DEFAULT ''")
+        }
     }
 
     private fun createLibraryFoldersTable(database: SQLiteDatabase) {
@@ -171,6 +178,11 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             found
         }
 
+    private fun hasTable(database: SQLiteDatabase, table: String): Boolean = database.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        arrayOf(table)
+    ).use { cursor -> cursor.moveToFirst() }
+
     fun saveDocument(uri: String, fileName: String, libraryFolderRemoteIdentifier: String? = null) =
         libraryDocuments.saveDocument(uri, fileName, libraryFolderRemoteIdentifier)
 
@@ -229,8 +241,18 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
     fun markDocumentOpened(identifier: Long, openedAt: Long = System.currentTimeMillis()) =
         libraryDocuments.markDocumentOpened(identifier, openedAt)
 
-    fun addAnnotation(documentIdentifier: Long, kind: String, text: String, note: String, color: Int, location: Int, pageNumber: Int = 0) =
-        annotationsRepository.addAnnotation(documentIdentifier, kind, text, note, color, location, pageNumber)
+    fun addAnnotation(
+        documentIdentifier: Long,
+        kind: String,
+        text: String,
+        note: String,
+        color: Int,
+        location: Int,
+        pageNumber: Int = 0,
+        locatorJson: String = ""
+    ) = annotationsRepository.addAnnotation(
+        documentIdentifier, kind, text, note, color, location, pageNumber, locatorJson
+    )
 
     fun annotations(documentIdentifier: Long? = null) = annotationsRepository.annotations(documentIdentifier)
 

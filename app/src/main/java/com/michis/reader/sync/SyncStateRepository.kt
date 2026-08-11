@@ -76,6 +76,7 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
                         put("color", remote.optInt("color", 0))
                         put("location", remote.optInt("location", 0))
                         put("page_number", remote.optInt("pageNumber", 0))
+                        put("locator_json", remote.optString("locatorJson"))
                         put("created_at", remote.optLong("createdAt", annotationUpdatedAt))
                         put("order_position", remote.optInt("orderPosition", 0))
                         put("sync_id", syncIdentifier)

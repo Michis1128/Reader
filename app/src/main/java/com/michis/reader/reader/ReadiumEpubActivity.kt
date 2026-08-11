@@ -390,7 +390,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 if (selectedText.isNotBlank()) {
                     when (item.itemId) {
                         ACTION_ADD_QUOTE -> {
-                            openQuoteColorPicker(selectedText, selection.locator.locations.position ?: 0)
+                            openQuoteColorPicker(selectedText, selection.locator)
                         }
                         ACTION_ADD_DICTIONARY -> {
                             launchReaderMenu(Intent(this@ReadiumEpubActivity, DictionaryActivity::class.java)
@@ -465,11 +465,12 @@ class ReadiumEpubActivity : FragmentActivity() {
         panelCoordinator.close(ReaderPanel.SEARCH)
     }
 
-    private fun openQuoteColorPicker(selectedText: String, location: Int) {
+    private fun openQuoteColorPicker(selectedText: String, locator: org.readium.r2.shared.publication.Locator) {
         launchReaderMenu(Intent(this, QuoteColorActivity::class.java)
             .putExtra(QuoteColorActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
             .putExtra(QuoteColorActivity.EXTRA_TEXT, selectedText)
-            .putExtra(QuoteColorActivity.EXTRA_LOCATION, location)
+            .putExtra(QuoteColorActivity.EXTRA_LOCATION, locator.locations.position ?: 0)
+            .putExtra(QuoteColorActivity.EXTRA_LOCATOR_JSON, locator.toJSON().toString())
             .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, progressSlider.progress + 1))
     }
 
@@ -572,7 +573,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
                 .putExtra(DictionaryActivity.EXTRA_SELECTED_TEXT, selectedText)
                 .putExtra(DictionaryActivity.EXTRA_SELECTED_CONTEXT, selection?.locator?.text?.before.orEmpty()))
-            else openQuoteColorPicker(selectedText, selection?.locator?.locations?.position ?: 0)
+            else selection?.locator?.let { openQuoteColorPicker(selectedText, it) }
         }
     }
 
