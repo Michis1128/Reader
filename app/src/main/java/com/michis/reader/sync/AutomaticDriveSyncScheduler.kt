@@ -46,10 +46,13 @@ class AutomaticDriveSyncScheduler(private val context: Context) {
         )
     }
 
-    fun enqueueImmediateSync(): UUID {
+    fun enqueueImmediateSync(direction: SyncDirection = SyncDirection.BIDIRECTIONAL): UUID {
         val request = OneTimeWorkRequestBuilder<GoogleDriveSyncWorker>()
             .setConstraints(networkConstraints())
-            .setInputData(workDataOf(GoogleDriveSyncWorker.KEY_MANUAL_EXECUTION to true))
+            .setInputData(workDataOf(
+                GoogleDriveSyncWorker.KEY_MANUAL_EXECUTION to true,
+                GoogleDriveSyncWorker.KEY_SYNC_DIRECTION to direction.storageValue
+            ))
             .build()
         preferences.edit().putString(KEY_LAST_IMMEDIATE_WORK_ID, request.id.toString()).apply()
         WorkManager.getInstance(context).enqueueUniqueWork(

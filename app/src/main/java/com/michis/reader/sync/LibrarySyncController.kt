@@ -13,7 +13,8 @@ import androidx.work.WorkInfo
 internal class LibrarySyncController(
     private val activity: ComponentActivity,
     private val statusText: TextView,
-    private val syncButton: Button,
+    private val uploadButton: Button,
+    private val downloadButton: Button,
     private val openSettings: () -> Unit,
     private val refreshLibrary: () -> Unit
 ) {
@@ -24,7 +25,7 @@ internal class LibrarySyncController(
             val workInfo = scheduler.latestImmediateWorkInfo(workInfos) ?: return@observe
             val active = workInfo.state == WorkInfo.State.ENQUEUED ||
                 workInfo.state == WorkInfo.State.BLOCKED || workInfo.state == WorkInfo.State.RUNNING
-            syncButton.isEnabled = !active
+            setButtonsEnabled(!active)
             statusText.text = when (workInfo.state) {
                 WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
                     "Sincronización: en espera de conexión…"
@@ -53,7 +54,7 @@ internal class LibrarySyncController(
         }
     }
 
-    fun synchronize() {
+    fun synchronize(direction: SyncDirection) {
         val session = OptionalGoogleAccountManager(activity).currentSession()
         val authorization = GoogleDriveAuthorizationManager(activity)
         val folderRepository = GoogleDriveFolderRepository(activity)
@@ -63,7 +64,8 @@ internal class LibrarySyncController(
             openSettings()
             return
         }
-        setWorkingState("Sincronización: conectando…")
+        val action = if (direction == SyncDirection.UPLOAD) "subir" else "descargar"
+        setWorkingState("Drive: preparando la acción de $action…")
         authorization.authorizationClient
             .authorize(authorization.authorizationRequest(session.accountIdentifier))
             .addOnSuccessListener { result ->
@@ -78,9 +80,9 @@ internal class LibrarySyncController(
                     finishWorking("Sincronización: Google no concedió acceso")
                     return@addOnSuccessListener
                 }
-                scheduler.enqueueImmediateSync()
-                statusText.text = "Sincronización: preparada para ejecutarse en segundo plano…"
-                message("La sincronización continuará en segundo plano")
+                scheduler.enqueueImmediateSync(direction)
+                statusText.text = "Drive: preparado para $action en segundo plano…"
+                message("Los cambios se van a $action en segundo plano")
             }
             .addOnFailureListener { error ->
                 finishWorking("Sincronización: error de autorización")
@@ -89,13 +91,18 @@ internal class LibrarySyncController(
     }
 
     private fun setWorkingState(status: String) {
-        syncButton.isEnabled = false
+        setButtonsEnabled(false)
         statusText.text = status
     }
 
     private fun finishWorking(status: String) {
-        syncButton.isEnabled = true
+        setButtonsEnabled(true)
         statusText.text = status
+    }
+
+    private fun setButtonsEnabled(enabled: Boolean) {
+        uploadButton.isEnabled = enabled
+        downloadButton.isEnabled = enabled
     }
 
     private fun message(value: String, long: Boolean = false) = Toast.makeText(

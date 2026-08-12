@@ -74,6 +74,81 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         )
     }
 
+    fun downloadAll(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        downloadedBookCount: Int,
+        onStep: (String) -> Unit = {}
+    ): FullSyncResult {
+        onStep("3/5 · Leyendo el manifiesto de Drive")
+        val manifest = loadManifest(accessToken, accountIdentifier, folder, repository) {
+            onStep("4/5 · Recuperando el respaldo anterior")
+        }
+        val localByKey = localRoot().documentsByKey()
+        val remoteEntries = manifest.optJSONObject("books") ?: JSONObject()
+        val remoteDocuments = JSONArray()
+        remoteEntries.keys().forEach { key ->
+            val local = localByKey[key] ?: return@forEach
+            val entry = remoteEntries.optJSONObject(key) ?: return@forEach
+            val localIsUntouched = local.optDouble("progress", 0.0) <= 0.0 &&
+                local.optInt("readerLocation", 0) <= 0 && local.optLong("lastOpenedAt", 0) == 0L
+            if (!localIsUntouched && entry.optLong("updatedAt", 0) <= stateUpdatedAt(local)) return@forEach
+            val fileName = entry.optString("fileName", stateFileName(key))
+            repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)?.let { bytes ->
+                remoteDocuments.put(JSONObject(bytes.toString(Charsets.UTF_8)))
+            }
+        }
+        if (remoteDocuments.length() > 0 || (manifest.optJSONArray("tombstones")?.length() ?: 0) > 0) {
+            onStep("4/5 · Aplicando cambios descargados de forma segura")
+            mergeRemoteRoot(JSONObject().put("schemaVersion", 2)
+                .put("documents", remoteDocuments)
+                .put("tombstones", manifest.optJSONArray("tombstones") ?: JSONArray()))
+        }
+        onStep("5/5 · Descarga completada")
+        return FullSyncResult(localByKey.size, downloadedBookCount)
+    }
+
+    fun uploadAll(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        onStep: (String) -> Unit = {}
+    ): FullSyncResult {
+        onStep("2/4 · Leyendo el manifiesto para comparar versiones")
+        val manifest = loadManifestForUpload(accessToken, accountIdentifier, folder, repository)
+        val remoteEntries = manifest.optJSONObject("books") ?: JSONObject()
+        val updatedEntries = JSONObject(remoteEntries.toString())
+        val localRoot = localRoot()
+        var uploadedCount = 0
+        localRoot.documents().forEach { document ->
+            val key = document.optString("documentKey")
+            if (key.isBlank()) return@forEach
+            val localUpdatedAt = stateUpdatedAt(document)
+            val previous = remoteEntries.optJSONObject(key)
+            val fileName = previous?.optString("fileName")?.takeIf { it.isNotBlank() } ?: stateFileName(key)
+            if (DirectionalSyncPolicy.shouldUpload(localUpdatedAt, previous?.optLong("updatedAt", 0))) {
+                onStep("3/4 · Subiendo ${document.optString("title", "libro")}")
+                repository.uploadNamedJson(accessToken, folder.identifier, fileName, document.toString().toByteArray())
+                updatedEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", localUpdatedAt))
+                uploadedCount++
+            }
+        }
+        val updatedManifest = JSONObject()
+            .put("schemaVersion", MANIFEST_SCHEMA_VERSION)
+            .put("books", updatedEntries)
+            .put("tombstones", DirectionalSyncPolicy.mergeTombstones(
+                manifest.optJSONArray("tombstones") ?: JSONArray(),
+                localRoot.optJSONArray("tombstones") ?: JSONArray()
+            ))
+            .put("updatedAt", System.currentTimeMillis())
+        repository.uploadNamedJson(accessToken, folder.identifier, MANIFEST_FILE_NAME, updatedManifest.toString(2).toByteArray())
+        onStep("4/4 · Subida completada: $uploadedCount libros con cambios")
+        return FullSyncResult(updatedEntries.length(), 0)
+    }
+
     fun synchronizeBook(
         accessToken: String,
         accountIdentifier: String,
@@ -129,6 +204,21 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         beforeLegacyMigration()
         repository.downloadLibrarySnapshotOrNull(accessToken, accountIdentifier, folder.identifier)?.let { bytes ->
             mergeRemoteRoot(JSONObject(bytes.toString(Charsets.UTF_8)))
+        }
+        return emptyManifest()
+    }
+
+    private fun loadManifestForUpload(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository
+    ): JSONObject {
+        repository.downloadNamedJsonOrNull(accessToken, folder.identifier, MANIFEST_FILE_NAME)?.let { bytes ->
+            return JSONObject(bytes.toString(Charsets.UTF_8))
+        }
+        if (repository.downloadLibrarySnapshotOrNull(accessToken, accountIdentifier, folder.identifier) != null) {
+            error("Hay un respaldo anterior en Drive. Descarga los cambios una vez antes de subir.")
         }
         return emptyManifest()
     }
