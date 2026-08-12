@@ -19,6 +19,7 @@ internal class LibrarySyncController(
     private val refreshLibrary: () -> Unit
 ) {
     private val scheduler = AutomaticDriveSyncScheduler(activity)
+    private val confirmationController = DriveSyncConfirmationController(activity)
 
     init {
         scheduler.immediateSyncWorkInfos().observe(activity) { workInfos ->
@@ -55,6 +56,10 @@ internal class LibrarySyncController(
     }
 
     fun synchronize(direction: SyncDirection) {
+        confirmationController.confirm(direction) { synchronizeConfirmed(direction) }
+    }
+
+    private fun synchronizeConfirmed(direction: SyncDirection) {
         val session = OptionalGoogleAccountManager(activity).currentSession()
         val authorization = GoogleDriveAuthorizationManager(activity)
         val folderRepository = GoogleDriveFolderRepository(activity)

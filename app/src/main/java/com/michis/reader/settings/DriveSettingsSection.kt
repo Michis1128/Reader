@@ -44,6 +44,7 @@ class DriveSettingsSection(
     private var panelToRefresh: LinearLayout? = null
     private var synchronizationPanel: LinearLayout? = null
     private val syncScheduler = AutomaticDriveSyncScheduler(activity)
+    private val syncConfirmation = DriveSyncConfirmationController(activity)
     private var syncObserverAttached = false
 
     private val libraryPickerLauncher = activity.registerForActivityResult(
@@ -177,17 +178,23 @@ class DriveSettingsSection(
                 container.addView(actionButton(if (fullSyncInProgress) "Trabajando en Drive…" else "Subir mis cambios") {
                     isEnabled = !fullSyncInProgress
                     setOnClickListener {
-                        isEnabled = false
-                        fullSyncInProgress = true
-                        synchronize(session, authorizationManager, container, this, SyncDirection.UPLOAD)
+                        val sourceButton = this
+                        syncConfirmation.confirm(SyncDirection.UPLOAD) {
+                            sourceButton.isEnabled = false
+                            fullSyncInProgress = true
+                            synchronize(session, authorizationManager, container, sourceButton, SyncDirection.UPLOAD)
+                        }
                     }
                 })
                 container.addView(actionButton(if (fullSyncInProgress) "Trabajando en Drive…" else "Descargar cambios de Drive") {
                     isEnabled = !fullSyncInProgress
                     setOnClickListener {
-                        isEnabled = false
-                        fullSyncInProgress = true
-                        synchronize(session, authorizationManager, container, this, SyncDirection.DOWNLOAD)
+                        val sourceButton = this
+                        syncConfirmation.confirm(SyncDirection.DOWNLOAD) {
+                            sourceButton.isEnabled = false
+                            fullSyncInProgress = true
+                            synchronize(session, authorizationManager, container, sourceButton, SyncDirection.DOWNLOAD)
+                        }
                     }
                 })
                 container.addView(automaticSyncControls())
@@ -207,6 +214,12 @@ class DriveSettingsSection(
                             isEnabled = true
                             Toast.makeText(activity, "No se pudo revocar Drive: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
                         }
+                }
+            })
+            if (advancedMode) container.addView(actionButton("Volver a mostrar advertencias de sincronización") {
+                setOnClickListener {
+                    syncConfirmation.restoreWarnings()
+                    Toast.makeText(activity, "Las advertencias de subida y descarga volverán a mostrarse", Toast.LENGTH_SHORT).show()
                 }
             })
         } else {
