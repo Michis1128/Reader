@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var libraryDisplayButton: Button
     private lateinit var libraryFilterButton: Button
     private lateinit var syncStatusText: TextView
-    private lateinit var syncButton: Button
+    private lateinit var uploadSyncButton: Button
+    private lateinit var downloadSyncButton: Button
     private lateinit var libraryPathText: TextView
     private var mainSection = MainSection.LIBRARY
     private val documentPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -85,7 +86,7 @@ class MainActivity : ComponentActivity() {
         }
         librarySections = LibrarySectionsController(this, database, documentList, libraryPathText)
         syncController = LibrarySyncController(
-            this, syncStatusText, syncButton, ::showGeneralSettings
+            this, syncStatusText, uploadSyncButton, downloadSyncButton, ::showGeneralSettings
         ) { refreshCurrentSection(searchInput.text?.toString().orEmpty()) }
         SystemBarInsets.apply(mainScreen)
         setContentView(mainScreen)
@@ -113,9 +114,11 @@ class MainActivity : ComponentActivity() {
             text = "Filtro: ${libraryBrowserState.sortMode.label}"
         }
         syncStatusText = binding.syncStatusText
-        syncButton = binding.syncButton
+        uploadSyncButton = binding.uploadSyncButton
+        downloadSyncButton = binding.downloadSyncButton
         libraryPathText = binding.libraryPathText
-        syncButton.setOnClickListener { syncController.synchronize() }
+        uploadSyncButton.setOnClickListener { syncController.synchronize(SyncDirection.UPLOAD) }
+        downloadSyncButton.setOnClickListener { syncController.synchronize(SyncDirection.DOWNLOAD) }
         binding.settingsButton.setOnClickListener { showGeneralSettings() }
         binding.importButton.setOnClickListener { showImportMenu() }
         searchInput.addTextChangedListener(SimpleTextWatcher(::refreshCurrentSection))

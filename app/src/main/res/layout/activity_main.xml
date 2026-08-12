@@ -23,15 +23,6 @@
             android:textSize="30sp" />
 
         <Button
-            android:id="@+id/syncButton"
-            style="@style/Widget.MichisReader.Button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:contentDescription="Sincronizar ahora"
-            android:text="↻"
-            android:textSize="20sp" />
-
-        <Button
             android:id="@+id/settingsButton"
             style="@style/Widget.MichisReader.Button"
             android:layout_width="wrap_content"
@@ -56,6 +47,34 @@
         android:layout_height="wrap_content"
         android:paddingBottom="@dimen/ui_content_spacing_small"
         android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="@dimen/ui_content_spacing">
+
+        <Button
+            android:id="@+id/uploadSyncButton"
+            style="@style/Widget.MichisReader.Button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:contentDescription="Subir cambios a Google Drive"
+            android:text="↑ Subir cambios"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/downloadSyncButton"
+            style="@style/Widget.MichisReader.Button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/ui_content_spacing"
+            android:layout_weight="1"
+            android:contentDescription="Descargar cambios de Google Drive"
+            android:text="↓ Descargar cambios"
+            android:textSize="12sp" />
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

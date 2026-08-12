@@ -38,13 +38,13 @@ class DriveSettingsSection(
     private val advancedMode: Boolean,
     private val openAdvancedSettings: () -> Unit
 ) {
-    private var fullSyncConfirmationArmed = false
     private var fullSyncInProgress = false
     private var lastFullSyncText: String? = null
     private var pendingAuthorizationResult: ((AuthorizationResult?) -> Unit)? = null
     private var panelToRefresh: LinearLayout? = null
     private var synchronizationPanel: LinearLayout? = null
     private val syncScheduler = AutomaticDriveSyncScheduler(activity)
+    private val syncConfirmation = DriveSyncConfirmationController(activity)
     private var syncObserverAttached = false
 
     private val libraryPickerLauncher = activity.registerForActivityResult(
@@ -95,7 +95,6 @@ class DriveSettingsSection(
                 WorkInfo.State.SUCCEEDED, WorkInfo.State.FAILED -> syncScheduler.lastStatus()
                 WorkInfo.State.CANCELLED -> "Sincronización cancelada."
             }
-            if (!fullSyncInProgress) fullSyncConfirmationArmed = false
             synchronizationPanel?.let(::render)
         }
     }
@@ -173,22 +172,28 @@ class DriveSettingsSection(
                 }
             })
             if (savedFolder != null) {
-                if (advancedMode && fullSyncConfirmationArmed) container.addView(description(
-                    "Se descargarán y fusionarán los datos más recientes, se aplicarán eliminaciones válidas y después se subirá el resultado combinado."
+                container.addView(description(
+                    "Elige Subir para enviar tus avances y anotaciones. Elige Descargar para recibir libros y cambios guardados en Drive. Ninguna opción reemplaza cambios más recientes."
                 ))
-                container.addView(actionButton(when {
-                        fullSyncInProgress -> "Sincronizando…"
-                        advancedMode && fullSyncConfirmationArmed -> "Confirmar sincronización"
-                        else -> "Sincronizar ahora"
-                    }) {
+                container.addView(actionButton(if (fullSyncInProgress) "Trabajando en Drive…" else "Subir mis cambios") {
                     isEnabled = !fullSyncInProgress
                     setOnClickListener {
-                        if (advancedMode && !fullSyncConfirmationArmed) {
-                            fullSyncConfirmationArmed = true
-                            render(container)
-                        } else {
-                            isEnabled = false; fullSyncInProgress = true
-                            synchronize(session, authorizationManager, container, this)
+                        val sourceButton = this
+                        syncConfirmation.confirm(SyncDirection.UPLOAD) {
+                            sourceButton.isEnabled = false
+                            fullSyncInProgress = true
+                            synchronize(session, authorizationManager, container, sourceButton, SyncDirection.UPLOAD)
+                        }
+                    }
+                })
+                container.addView(actionButton(if (fullSyncInProgress) "Trabajando en Drive…" else "Descargar cambios de Drive") {
+                    isEnabled = !fullSyncInProgress
+                    setOnClickListener {
+                        val sourceButton = this
+                        syncConfirmation.confirm(SyncDirection.DOWNLOAD) {
+                            sourceButton.isEnabled = false
+                            fullSyncInProgress = true
+                            synchronize(session, authorizationManager, container, sourceButton, SyncDirection.DOWNLOAD)
                         }
                     }
                 })
@@ -209,6 +214,12 @@ class DriveSettingsSection(
                             isEnabled = true
                             Toast.makeText(activity, "No se pudo revocar Drive: ${error.message.orEmpty()}", Toast.LENGTH_LONG).show()
                         }
+                }
+            })
+            if (advancedMode) container.addView(actionButton("Volver a mostrar advertencias de sincronización") {
+                setOnClickListener {
+                    syncConfirmation.restoreWarnings()
+                    Toast.makeText(activity, "Las advertencias de subida y descarga volverán a mostrarse", Toast.LENGTH_SHORT).show()
                 }
             })
         } else {
@@ -322,16 +333,20 @@ class DriveSettingsSection(
         session: GoogleAccountSession,
         authorizationManager: GoogleDriveAuthorizationManager,
         container: LinearLayout,
-        sourceButton: Button
+        sourceButton: Button,
+        direction: SyncDirection
     ) = requestAuthorization(session, authorizationManager, container, sourceButton, onFailure = {
-        fullSyncInProgress = false; fullSyncConfirmationArmed = false; render(container)
+        fullSyncInProgress = false; render(container)
     }) { _ ->
-        syncScheduler.enqueueImmediateSync()
-        fullSyncConfirmationArmed = false
-        lastFullSyncText = "Sincronización preparada para ejecutarse en segundo plano…"
+        syncScheduler.enqueueImmediateSync(direction)
+        lastFullSyncText = if (direction == SyncDirection.UPLOAD) {
+            "Subida preparada para ejecutarse en segundo plano…"
+        } else {
+            "Descarga preparada para ejecutarse en segundo plano…"
+        }
         sourceButton.isEnabled = true
         render(container)
-        Toast.makeText(activity, "Puedes seguir usando la app mientras se sincroniza", Toast.LENGTH_LONG).show()
+        Toast.makeText(activity, "Puedes seguir usando la app mientras Drive trabaja", Toast.LENGTH_LONG).show()
     }
 
     private fun automaticSyncControls(): View {

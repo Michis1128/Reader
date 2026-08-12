@@ -11,6 +11,34 @@ data class FullSyncResult(
 
 /** Coordina la detección de EPUB modificados y los estados incrementales por libro. */
 class GoogleDriveSyncCoordinator(private val context: Context) {
+    fun download(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        onStep: (String) -> Unit = {}
+    ): FullSyncResult = synchronized(SYNC_LOCK) {
+        onStep("1/5 · Buscando libros nuevos o modificados en Drive")
+        val books = GoogleDriveBookLibraryRepository(context)
+            .synchronizeSelectedFolder(accessToken, accountIdentifier)
+        onStep("2/5 · ${books.downloadedFiles} libros descargados")
+        IncrementalLibrarySyncCoordinator(context).downloadAll(
+            accessToken, accountIdentifier, folder, repository, books.downloadedFiles, onStep
+        )
+    }
+
+    fun upload(
+        accessToken: String,
+        accountIdentifier: String,
+        folder: GoogleDriveFolder,
+        repository: GoogleDriveFolderRepository,
+        onStep: (String) -> Unit = {}
+    ): FullSyncResult = synchronized(SYNC_LOCK) {
+        onStep("1/4 · Preparando tus cambios locales")
+        IncrementalLibrarySyncCoordinator(context).uploadAll(
+            accessToken, accountIdentifier, folder, repository, onStep
+        )
+    }
     fun synchronize(
         accessToken: String,
         accountIdentifier: String,

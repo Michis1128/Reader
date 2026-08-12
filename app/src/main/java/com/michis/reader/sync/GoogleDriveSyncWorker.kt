@@ -42,10 +42,24 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
                 )
                 scheduler.saveStatus("Correcta: último libro sincronizado")
             } else {
-                val syncResult = GoogleDriveSyncCoordinator(applicationContext).synchronize(
-                    accessToken, session.accountIdentifier, folder, repository
-                ) { step -> publishProgress(scheduler, step) }
-                scheduler.saveStatus("Correcta: ${syncResult.documentCount} libros sincronizados")
+                val direction = SyncDirection.fromStorageValue(inputData.getString(KEY_SYNC_DIRECTION))
+                val coordinator = GoogleDriveSyncCoordinator(applicationContext)
+                val syncResult = when (direction) {
+                    SyncDirection.UPLOAD -> coordinator.upload(
+                        accessToken, session.accountIdentifier, folder, repository
+                    ) { step -> publishProgress(scheduler, step) }
+                    SyncDirection.DOWNLOAD -> coordinator.download(
+                        accessToken, session.accountIdentifier, folder, repository
+                    ) { step -> publishProgress(scheduler, step) }
+                    SyncDirection.BIDIRECTIONAL -> coordinator.synchronize(
+                        accessToken, session.accountIdentifier, folder, repository
+                    ) { step -> publishProgress(scheduler, step) }
+                }
+                scheduler.saveStatus(when (direction) {
+                    SyncDirection.UPLOAD -> "Correcta: cambios locales subidos"
+                    SyncDirection.DOWNLOAD -> "Correcta: ${syncResult.downloadedDocumentCount} libros descargados y datos actualizados"
+                    SyncDirection.BIDIRECTIONAL -> "Correcta: ${syncResult.documentCount} libros sincronizados"
+                })
             }
             Result.success()
         } catch (error: Exception) {
@@ -74,5 +88,18 @@ class GoogleDriveSyncWorker(appContext: Context, parameters: WorkerParameters) :
         const val KEY_MANUAL_EXECUTION = "manual_execution"
         const val KEY_DOCUMENT_IDENTIFIER = "document_identifier"
         const val KEY_PROGRESS_MESSAGE = "progress_message"
+        const val KEY_SYNC_DIRECTION = "sync_direction"
+    }
+}
+
+enum class SyncDirection(val storageValue: String) {
+    BIDIRECTIONAL("bidirectional"),
+    UPLOAD("upload"),
+    DOWNLOAD("download");
+
+    companion object {
+        fun fromStorageValue(value: String?): SyncDirection = entries.firstOrNull {
+            it.storageValue == value
+        } ?: BIDIRECTIONAL
     }
 }
