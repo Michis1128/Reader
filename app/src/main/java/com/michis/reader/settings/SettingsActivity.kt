@@ -51,7 +51,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import com.samsung.android.sdk.penremote.SpenRemote
 import com.samsung.android.sdk.penremote.SpenUnitManager
@@ -197,7 +196,7 @@ private fun SettingsScreen(
 
 @Composable
 private fun DrivePanel(section: DriveSettingsSection) {
-    AndroidView(factory = { section.createPanel() }, modifier = Modifier.fillMaxWidth())
+    section.Content()
 }
 
 @Composable
@@ -349,6 +348,6 @@ private fun SettingsFamily(title: String?, content: @Composable ColumnScope.() -
 }
 
 @Composable
-private fun SettingsDescription(value: String) {
+internal fun SettingsDescription(value: String) {
     Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
