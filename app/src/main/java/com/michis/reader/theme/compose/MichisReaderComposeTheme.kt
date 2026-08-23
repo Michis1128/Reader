@@ -3,8 +3,8 @@ package com.michis.reader.theme.compose
 import com.michis.reader.theme.AppPalette
 import com.michis.reader.theme.AppThemePalette
 
-import android.app.Activity
 import android.graphics.Color as AndroidColor
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -13,13 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 
-/** Adapta la paleta histórica de la app a Material 3 durante la migración gradual. */
+/** Expone la paleta configurable de la app como un tema Material 3. */
 @Composable
 fun MichisReaderComposeTheme(content: @Composable () -> Unit) {
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val palette = activity?.let(AppThemePalette::current) ?: fallbackPalette(isSystemInDarkTheme())
     val dark = AndroidColor.luminance(palette.background) < 0.45f
     val colorScheme = if (dark) {

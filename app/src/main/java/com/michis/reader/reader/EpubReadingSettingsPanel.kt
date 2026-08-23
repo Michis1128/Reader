@@ -73,7 +73,6 @@ class EpubReadingSettingsPanel(
     private var themeRevision by mutableIntStateOf(0)
 
     fun create(): View = ComposeView(activity).apply {
-        tag = ReaderMenuTags.SURFACE
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
             themeRevision
@@ -430,11 +429,6 @@ private fun SettingLabel(value: String) {
 
 private fun formatNumber(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
-
-object ReaderMenuTags {
-    const val SURFACE = "reader_menu_surface"
-    const val CARD = "reader_menu_card"
-}
 
 private val ALIGNMENT_NAMES = arrayOf("Justificado", "Izquierda", "Centro", "Derecha")
 private val ALIGNMENTS = arrayOf(TextAlign.JUSTIFY, TextAlign.START, TextAlign.CENTER, TextAlign.END)

@@ -689,11 +689,7 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun applyMenuColors(themeColors: Pair<Int, Int>) {
         val themeIndex = ReadingThemePalette.names.indices.firstOrNull { ReadingThemePalette.colors(it) == themeColors } ?: 0
-        val palette = AppThemePalette.applyReaderMenus(
-            this,
-            ReadingThemePalette.names[themeIndex],
-            listOf(topControls, bottomControls, compactProgressSlider, settingsPanel, contentsPanel, searchPanel)
-        )
+        val palette = AppThemePalette.forReader(this, ReadingThemePalette.names[themeIndex])
         if (::searchController.isInitialized) searchController.refreshTheme()
         if (::contentsController.isInitialized) contentsController.refreshTheme()
         if (::settingsController.isInitialized) settingsController.refreshTheme()

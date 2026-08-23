@@ -68,7 +68,6 @@ internal class EpubSearchController(
     private var themeRevision by mutableIntStateOf(0)
 
     fun create(): View = ComposeView(activity).apply {
-        tag = ReaderMenuTags.CARD
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
             themeRevision

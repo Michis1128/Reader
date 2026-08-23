@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Michis Reader</string>
-    <string name="action_back">Regresar</string>
-    <string name="library_title">Mi biblioteca</string>
-    <string name="currently_reading_title">Leyendo actualmente</string>
-    <string name="settings_title">Configuración</string>
-    <string name="quotes_title">Citas</string>
-    <string name="bookmarks_title">Marcadores</string>
-    <string name="dictionaries_title">Diccionarios</string>
-    <string name="reset_books_title">Reiniciar libros</string>
     <string name="google_web_client_id">33987563321-0dbosimmoopurmg093nbi3tdbk80mgru.apps.googleusercontent.com</string>
     <string name="spen_actions">Controles del lector</string>
     <string name="spen_click">Página siguiente</string>

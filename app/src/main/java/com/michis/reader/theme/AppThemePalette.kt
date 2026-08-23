@@ -3,21 +3,8 @@ package com.michis.reader.theme
 import com.michis.reader.settings.ReaderSettingsRepository
 
 import android.app.Activity
-import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
-import android.view.View
-import android.view.ViewGroup
-import android.widget.Button
-import android.widget.CompoundButton
-import android.widget.EditText
-import android.widget.Spinner
-import android.widget.Switch
-import android.widget.SeekBar
-import android.widget.TextView
 import androidx.core.graphics.ColorUtils
-import java.util.WeakHashMap
 
 data class AppPalette(
     val background: Int,
@@ -30,27 +17,8 @@ data class AppPalette(
     val outline: Int
 )
 
+/** Calcula las paletas compartidas por Compose y los controles del sistema. */
 object AppThemePalette {
-    private enum class SurfaceRole { BACKGROUND, SURFACE, CARD, INHERITED }
-    private val managedSurfaces = WeakHashMap<View, SurfaceRole>()
-
-    fun markBackground(view: View) {
-        managedSurfaces[view] = SurfaceRole.BACKGROUND
-    }
-
-    fun markSurface(view: View) {
-        managedSurfaces[view] = SurfaceRole.SURFACE
-    }
-
-    fun markCard(view: View) {
-        managedSurfaces[view] = SurfaceRole.CARD
-    }
-
-    fun cardBackground(activity: Activity, radiusDp: Float = 18f): GradientDrawable {
-        val colors = current(activity)
-        return rounded(colors.card, activity.resources.displayMetrics.density, radiusDp)
-    }
-
     fun current(activity: Activity): AppPalette {
         val settings = ReaderSettingsRepository.get(activity)
         val preferences = settings.preferences
@@ -59,27 +27,18 @@ object AppThemePalette {
             "light" -> named("Día")
             "dark" -> named("Noche")
             "custom" -> custom(runCatching {
-                Color.parseColor(preferences.getString(ReaderSettingsRepository.KEY_MENU_CUSTOM_COLOR, ReaderSettingsRepository.DEFAULT_MENU_CUSTOM_COLOR))
+                Color.parseColor(preferences.getString(
+                    ReaderSettingsRepository.KEY_MENU_CUSTOM_COLOR,
+                    ReaderSettingsRepository.DEFAULT_MENU_CUSTOM_COLOR
+                ))
             }.getOrDefault(0xFFFFF4E0.toInt()))
             else -> named(if (mode.startsWith("theme:")) mode.removePrefix("theme:") else theme)
         }
     }
 
-    fun textFor(background: Int): Int = contrast(background)
-
     fun forReader(activity: Activity, readingTheme: String): AppPalette {
         val mode = ReaderSettingsRepository.get(activity).menuColorMode
         return if (mode == "theme" || mode.startsWith("theme:")) named(readingTheme) else current(activity)
-    }
-
-    /** Aplica la misma geometría y contraste globales a los controles superpuestos del lector. */
-    fun applyReaderMenus(activity: Activity, readingTheme: String, roots: Collection<View>): AppPalette {
-        val colors = forReader(activity, readingTheme)
-        roots.forEach { root ->
-            if (root is ViewGroup) markSurface(root)
-            style(root, colors, colors.surface, colors.primaryText, 1)
-        }
-        return colors
     }
 
     fun named(name: String): AppPalette = when (name) {
@@ -99,13 +58,29 @@ object AppThemePalette {
         else -> palette(0xFFF7F7F9, 0xFFFFFFFF, 0xFFEEEFF3, 0xFF53699F, 0xFF191B21, 0xFF5D616B)
     }
 
-    private fun palette(background: Long, surface: Long, card: Long, accent: Long, text: Long, secondary: Long): AppPalette {
+    private fun palette(
+        background: Long,
+        surface: Long,
+        card: Long,
+        accent: Long,
+        text: Long,
+        secondary: Long
+    ): AppPalette {
         val backgroundColor = background.toInt()
         val surfaceColor = surface.toInt()
         val accentColor = accent.toInt()
         val primaryText = readable(text.toInt(), surfaceColor)
         val secondaryText = readable(secondary.toInt(), backgroundColor)
-        return AppPalette(backgroundColor, surfaceColor, card.toInt(), accentColor, primaryText, secondaryText, contrast(accentColor), ColorUtils.setAlphaComponent(primaryText, 70))
+        return AppPalette(
+            backgroundColor,
+            surfaceColor,
+            card.toInt(),
+            accentColor,
+            primaryText,
+            secondaryText,
+            contrast(accentColor),
+            ColorUtils.setAlphaComponent(primaryText, 70)
+        )
     }
 
     private fun custom(color: Int): AppPalette {
@@ -118,177 +93,27 @@ object AppThemePalette {
         val accent = ColorUtils.blendARGB(base, if (dark) Color.WHITE else Color.BLACK, .22f)
         val surfaceText = contrast(surface)
         val secondaryText = readable(ColorUtils.blendARGB(surfaceText, background, .16f), background)
-        return AppPalette(background, surface, card, accent, surfaceText, secondaryText, contrast(accent), ColorUtils.setAlphaComponent(contrast(card), 65))
+        return AppPalette(
+            background,
+            surface,
+            card,
+            accent,
+            surfaceText,
+            secondaryText,
+            contrast(accent),
+            ColorUtils.setAlphaComponent(contrast(card), 65)
+        )
     }
 
-    @Suppress("DEPRECATION")
-    fun apply(activity: Activity) {
-        val content = activity.window.decorView.findViewById<ViewGroup>(android.R.id.content) ?: return
-        val colors = current(activity)
-        content.setBackgroundColor(colors.background)
-        repeat(content.childCount) { style(content.getChildAt(it), colors, colors.background, colors.primaryText, 0) }
-        activity.window.statusBarColor = colors.surface
-        activity.window.navigationBarColor = colors.background
-    }
-
-    private fun style(view: View, colors: AppPalette, inheritedBackground: Int, inheritedText: Int, depth: Int) {
-        var childBackground = inheritedBackground
-        var childText = inheritedText
-        if (view is ViewGroup) {
-            val drawableBackground = view.background
-            val solid = (drawableBackground as? ColorDrawable)?.color
-            val hasPanelShape = drawableBackground != null && solid == null
-            val taggedRole = when (view.tag) {
-                "reader_menu_surface" -> SurfaceRole.SURFACE
-                "reader_menu_card" -> SurfaceRole.CARD
-                else -> null
-            }
-            val previousRole = managedSurfaces[view] ?: taggedRole
-            val role = previousRole ?: when {
-                depth == 0 -> SurfaceRole.BACKGROUND
-                hasPanelShape -> SurfaceRole.CARD
-                view.elevation >= 4f * view.resources.displayMetrics.density -> SurfaceRole.SURFACE
-                view.elevation > 0f -> SurfaceRole.CARD
-                solid != null && isNeutral(solid) -> SurfaceRole.INHERITED
-                else -> null
-            }
-            val replacement = when (role) {
-                SurfaceRole.BACKGROUND -> colors.background
-                SurfaceRole.SURFACE -> colors.surface
-                SurfaceRole.CARD -> colors.card
-                SurfaceRole.INHERITED -> inheritedBackground
-                null -> null
-            }
-            if (replacement != null) {
-                managedSurfaces[view] = role
-                childBackground = replacement
-                childText = contrast(replacement)
-                val savedLeft = view.paddingLeft
-                val savedTop = view.paddingTop
-                val savedRight = view.paddingRight
-                val savedBottom = view.paddingBottom
-                view.background = if (role == SurfaceRole.CARD) rounded(replacement, view.resources.displayMetrics.density) else ColorDrawable(replacement)
-                view.setPadding(savedLeft, savedTop, savedRight, savedBottom)
-                if (role == SurfaceRole.CARD) view.ensureOuterMargins(horizontalDp = 2, verticalDp = 5)
-            }
-        } else if (view is CompoundButton && view.background != null && view.background !is ColorDrawable) {
-            // Las filas seleccionables, como los libros de "Reiniciar libros", son
-            // CompoundButton con una tarjeta propia y no heredan visualmente el fondo padre.
-            childBackground = colors.card
-            childText = contrast(colors.card)
-            view.setRoundedBackground(colors.card, radiusDp = 18f)
-        }
-        when (view) {
-            is Switch -> {
-                view.setTextColor(childText)
-                view.backgroundTintList = null
-                view.thumbTintList = switchThumbColors(colors, childBackground)
-                view.trackTintList = switchTrackColors(colors, childBackground)
-            }
-            is CompoundButton -> {
-                view.setTextColor(childText)
-                view.backgroundTintList = null
-                view.buttonTintList = selectionColors(colors, childBackground)
-            }
-            is Button -> {
-                view.backgroundTintList = null
-                view.setRoundedBackground(colors.accent, radiusDp = 24f)
-                view.setTextColor(colors.onAccent)
-                view.minimumHeight = (48 * view.resources.displayMetrics.density).toInt()
-                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
-            }
-            is SeekBar -> {
-                view.progressTintList = ColorStateList.valueOf(colors.accent)
-                view.thumbTintList = ColorStateList.valueOf(colors.accent)
-                view.progressBackgroundTintList = ColorStateList.valueOf(colors.outline)
-            }
-            is EditText -> {
-                val inputText = contrast(colors.surface)
-                val savedPadding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
-                view.setTextColor(inputText)
-                view.setHintTextColor(ColorUtils.setAlphaComponent(inputText, 145))
-                view.backgroundTintList = null
-                view.background = outlined(colors.surface, colors.outline, view.resources.displayMetrics.density, 16f)
-                view.setPadding(savedPadding[0], savedPadding[1], savedPadding[2], savedPadding[3])
-                view.ensureOuterMargins(horizontalDp = 4, verticalDp = 5)
-            }
-            is Spinner -> {
-                val horizontal = (12 * view.resources.displayMetrics.density).toInt()
-                val vertical = (8 * view.resources.displayMetrics.density).toInt()
-                val outsideHorizontal = (4 * view.resources.displayMetrics.density).toInt()
-                val outsideVertical = (5 * view.resources.displayMetrics.density).toInt()
-                view.setPadding(horizontal, vertical, horizontal, vertical)
-                view.minimumHeight = (48 * view.resources.displayMetrics.density).toInt()
-                view.backgroundTintList = null
-                val savedPadding = intArrayOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
-                view.background = outlined(colors.surface, colors.outline, view.resources.displayMetrics.density, 16f)
-                view.setPadding(savedPadding[0], savedPadding[1], savedPadding[2], savedPadding[3])
-                view.isLongClickable = true
-                if (view !is com.michis.reader.ui.LimitedHeightSpinner) view.setOnLongClickListener { true }
-                (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { parameters ->
-                    parameters.marginStart = maxOf(parameters.marginStart, outsideHorizontal)
-                    parameters.marginEnd = maxOf(parameters.marginEnd, outsideHorizontal)
-                    parameters.topMargin = maxOf(parameters.topMargin, outsideVertical)
-                    parameters.bottomMargin = maxOf(parameters.bottomMargin, outsideVertical)
-                    view.layoutParams = parameters
-                }
-            }
-            is TextView -> view.setTextColor(childText)
-        }
-        if (view is ViewGroup) repeat(view.childCount) { style(view.getChildAt(it), colors, childBackground, childText, depth + 1) }
-    }
-
-    private fun rounded(color: Int, density: Float, radiusDp: Float = 18f) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = radiusDp * density
-        setStroke(maxOf(1, density.toInt()), ColorUtils.setAlphaComponent(contrast(color), 42))
-    }
-
-    private fun outlined(color: Int, outline: Int, density: Float, radiusDp: Float) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = radiusDp * density
-        setStroke(maxOf(1, density.toInt()), outline)
-    }
-
-    private fun View.setRoundedBackground(color: Int, radiusDp: Float) {
-        val left = paddingLeft
-        val top = paddingTop
-        val right = paddingRight
-        val bottom = paddingBottom
-        background = rounded(color, resources.displayMetrics.density, radiusDp)
-        setPadding(left, top, right, bottom)
-    }
-
-    private fun View.ensureOuterMargins(horizontalDp: Int, verticalDp: Int) {
-        val parameters = layoutParams as? ViewGroup.MarginLayoutParams ?: return
-        val horizontal = (horizontalDp * resources.displayMetrics.density).toInt()
-        val vertical = (verticalDp * resources.displayMetrics.density).toInt()
-        parameters.marginStart = maxOf(parameters.marginStart, horizontal)
-        parameters.marginEnd = maxOf(parameters.marginEnd, horizontal)
-        parameters.topMargin = maxOf(parameters.topMargin, vertical)
-        parameters.bottomMargin = maxOf(parameters.bottomMargin, vertical)
-        layoutParams = parameters
-    }
-
-    private fun selectionColors(colors: AppPalette, background: Int) = ColorStateList(
-        arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-        intArrayOf(colors.accent, ColorUtils.blendARGB(contrast(background), background, .42f))
-    )
-
-    private fun switchThumbColors(colors: AppPalette, background: Int) = ColorStateList(
-        arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-        intArrayOf(colors.onAccent, ColorUtils.blendARGB(contrast(background), background, .28f))
-    )
-
-    private fun switchTrackColors(colors: AppPalette, background: Int) = ColorStateList(
-        arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-        intArrayOf(colors.accent, ColorUtils.blendARGB(contrast(background), background, .65f))
-    )
-    private fun isNeutral(color: Int): Boolean = FloatArray(3).also { ColorUtils.colorToHSL(color, it) }[1] < .15f
     private fun contrast(color: Int): Int {
         val dark = 0xFF151619.toInt()
-        return if (ColorUtils.calculateContrast(Color.WHITE, color) >= ColorUtils.calculateContrast(dark, color)) Color.WHITE else dark
+        return if (ColorUtils.calculateContrast(Color.WHITE, color) >= ColorUtils.calculateContrast(dark, color)) {
+            Color.WHITE
+        } else {
+            dark
+        }
     }
+
     private fun readable(preferred: Int, background: Int): Int =
         if (ColorUtils.calculateContrast(preferred, background) >= 4.5) preferred else contrast(background)
 }

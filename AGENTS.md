@@ -76,12 +76,10 @@ Compose es la tecnología de interfaz vigente. No reincorpores layouts XML o Vie
 - `settings/SettingsActivity.kt`: configuración general.
 - `settings/DriveSettingsSection.kt`: cuenta, autorización y sincronización visible al usuario.
 - `settings/ResetBooksActivity.kt`: reinicio seleccionable de libros.
-- `theme/AppThemePalette.kt`: paleta global, contraste, fondos y estilo recursivo.
+- `theme/AppThemePalette.kt`: cálculo de paleta global y contraste para Compose y barras del sistema.
 - `theme/ReadingThemePalette.kt`: temas disponibles para el contenido EPUB.
 - `theme/KvColorPickerOverlay.kt`: único punto de entrada para escoger colores.
 - `ui/compose/MichisReaderComponents.kt`: encabezado fijo, regreso visible y componentes compartidos.
-- `ui/SystemBarInsets.kt`: aplicación compartida de barras del sistema y notch en actividades normales; no dupliques listeners de insets por pantalla.
-- `ui/LimitedHeightSpinner.kt`: compatibilidad histórica pendiente de limpieza; no usar para pantallas nuevas en Compose.
 
 ### Google Drive y sincronización
 
@@ -200,15 +198,13 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 - Mantén separación entre botones; no deben tocarse. Evita controles tan grandes que oculten acciones en teléfonos verticales.
 - Los botones Compose usan `MichisReaderButton`: forma de píldora, radio de 24 dp y altura mínima de 48 dp.
 - Inputs y desplegables Compose usan radio de 16 dp, borde temático y espaciado coherente con los componentes compartidos. No agregues controles visualmente aislados sin una razón funcional.
-- Usa `ui_component_margin_horizontal`, `ui_component_margin_vertical` y las variantes `ui_content_spacing*` para separar componentes; evita nuevos márgenes arbitrarios codificados directamente.
+- Usa las constantes y componentes Compose compartidos para mantener un espaciado uniforme; evita valores aislados sin una razón funcional.
 - Los paneles editables usan tarjetas/rectángulos redondeados con padding interno; títulos de sección quedan fuera cuando así está establecido.
-- Antes de aplicar `AppThemePalette.apply(activity)`, marca fondos especiales con `markBackground`, `markSurface` o `markCard`.
-- Las vistas añadidas después del primer render deben volver a recibir el tema, normalmente con `content.post { AppThemePalette.apply(activity) }`.
 - No fijes fondos crema, blancos o negros en Kotlin si deben responder al tema. Usa la paleta y contraste dinámico.
 - El texto debe obtener contraste suficiente sobre cada fondo. No derives el color del texto suponiendo que todos los temas son claros.
 - Para colores personalizados usa solamente `KvColorPickerOverlay.show(...)`. No reincorpores sliders RGB/HSV ni otro selector paralelo.
 - La identidad visual usa `ic_michis_reader_mark`, el icono adaptativo `ic_launcher` y su capa `monochrome`. Conserva las variantes clara/nocturna y la capa monocromática para iconos temáticos; no reemplaces el launcher por un PNG plano con bordes blancos.
-- Los spinners usan `LimitedHeightSpinner`: 3–4 opciones visibles, scroll para el resto, fondo temático, selección por toque y sin apertura por pulsación prolongada.
+- Los desplegables Compose muestran 3–4 opciones antes de requerir scroll, usan fondo temático y solo se abren con un toque normal.
 - La transición futura de textos visibles a `strings.xml` está especificada en `cambios_futuro.md`. Si el usuario dice “mandarlo para el futuro”, documenta la propuesta allí.
 
 ## 7. Forma segura de realizar cambios

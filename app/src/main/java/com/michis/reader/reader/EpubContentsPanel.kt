@@ -48,7 +48,6 @@ class EpubContentsPanel(
     private var themeRevision by mutableIntStateOf(0)
 
     fun create(): View = ComposeView(activity).apply {
-        tag = ReaderMenuTags.SURFACE
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
         setContent {
             themeRevision
