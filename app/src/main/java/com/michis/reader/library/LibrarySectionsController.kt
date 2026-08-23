@@ -4,7 +4,6 @@ import com.michis.reader.annotations.BookQuotesActivity
 import com.michis.reader.data.ReaderDatabase
 import com.michis.reader.databinding.ItemLibrarySectionCardBinding
 import com.michis.reader.databinding.ViewEmptyStateBinding
-import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.theme.AppThemePalette
 
 import android.app.Activity
@@ -36,29 +35,6 @@ internal class LibrarySectionsController(
                 activity.startActivity(
                     Intent(activity, BookQuotesActivity::class.java)
                         .putExtra(BookQuotesActivity.EXTRA_DOCUMENT_IDENTIFIER, documentIdentifier)
-                )
-            }
-            container.addView(binding.root)
-        }
-        applyCurrentTheme()
-    }
-
-    fun showDictionaries() {
-        prepareSection()
-        val documents = database.documentsWithDictionaries()
-        if (documents.isEmpty()) addEmpty("Los libros que tengan diccionario aparecerán aquí.")
-        documents.forEach { document ->
-            val binding = sectionCard()
-            val count = database.dictionaryCategories(document.identifier).size
-            binding.titleText.text = document.title
-            binding.subtitleText.apply {
-                text = "$count subcategoría${if (count == 1) "" else "s"}"
-                visibility = View.VISIBLE
-            }
-            binding.root.setOnClickListener {
-                activity.startActivity(
-                    Intent(activity, DictionaryActivity::class.java)
-                        .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
                 )
             }
             container.addView(binding.root)

@@ -19,6 +19,7 @@
         <activity android:name=".sync.drive.DriveLibraryPickerActivity" />
         <activity android:name=".settings.ResetBooksActivity" />
         <activity android:name=".dictionary.DictionaryActivity" />
+        <activity android:name=".dictionary.DictionariesActivity" />
         <activity android:name=".annotations.QuoteColorActivity" />
         <activity android:name=".annotations.BookQuotesActivity" />
         <activity android:name=".annotations.BookmarksActivity" />

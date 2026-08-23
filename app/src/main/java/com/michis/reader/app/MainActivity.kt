@@ -4,6 +4,7 @@ import com.michis.reader.R
 import com.michis.reader.annotations.BookmarksActivity
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityMainBinding
+import com.michis.reader.dictionary.DictionariesActivity
 import com.michis.reader.library.*
 import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.settings.SettingsActivity
@@ -22,7 +23,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
-    private enum class MainSection { LIBRARY, CURRENTLY_READING, ANNOTATIONS, DICTIONARIES }
+    private enum class MainSection { LIBRARY, CURRENTLY_READING, ANNOTATIONS }
     private lateinit var database: ReaderDatabase
     private lateinit var documentList: LinearLayout
     private lateinit var emptyMessage: TextView
@@ -129,7 +130,9 @@ class MainActivity : ComponentActivity() {
         binding.bookmarksTabButton.setOnClickListener {
             startActivity(Intent(this, BookmarksActivity::class.java))
         }
-        binding.dictionariesTabButton.setOnClickListener { showDictionaries() }
+        binding.dictionariesTabButton.setOnClickListener {
+            startActivity(Intent(this, DictionariesActivity::class.java))
+        }
         libraryDisplayButton.setOnClickListener { cycleLibraryDisplayMode() }
         libraryFilterButton.setOnClickListener { showLibraryFilters() }
         libraryPathText.setOnClickListener { navigateToParentFolder() }
@@ -187,7 +190,7 @@ class MainActivity : ComponentActivity() {
         when (mainSection) {
             MainSection.LIBRARY -> refreshLibrary(query)
             MainSection.CURRENTLY_READING -> refreshCurrentlyReading(query)
-            MainSection.ANNOTATIONS, MainSection.DICTIONARIES -> Unit
+            MainSection.ANNOTATIONS -> Unit
         }
     }
 
@@ -277,10 +280,6 @@ class MainActivity : ComponentActivity() {
         librarySections.showQuotes()
     }
 
-    private fun showDictionaries() {
-        mainSection = MainSection.DICTIONARIES
-        librarySections.showDictionaries()
-    }
     private fun showGeneralSettings() {
         startActivity(Intent(this, SettingsActivity::class.java))
     }
