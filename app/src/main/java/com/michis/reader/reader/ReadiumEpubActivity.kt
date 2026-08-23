@@ -2,10 +2,8 @@
 
 package com.michis.reader.reader
 
-import com.michis.reader.R
 import com.michis.reader.annotations.*
 import com.michis.reader.data.*
-import com.michis.reader.databinding.ActivityReadiumEpubBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
@@ -27,6 +25,7 @@ import android.util.TypedValue
 import android.view.*
 import android.widget.*
 import androidx.fragment.app.FragmentActivity
+import androidx.fragment.app.FragmentContainerView
 import androidx.fragment.app.commitNow
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
@@ -48,12 +47,12 @@ import org.readium.r2.streamer.PublicationOpener
 import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 class ReadiumEpubActivity : FragmentActivity() {
-    private lateinit var screenBinding: ActivityReadiumEpubBinding
     private val readerSettings by lazy { ReaderSettingsRepository.get(this) }
     private val readerWindow by lazy { ReaderWindowController(this) }
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
     private lateinit var rootLayout: FrameLayout
+    private var navigatorContainerIdentifier = View.NO_ID
     private lateinit var topControls: View
     private lateinit var bottomControls: View
     private lateinit var controlsController: EpubReaderControls
@@ -139,8 +138,12 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     private fun buildScreen(): View {
-        screenBinding = ActivityReadiumEpubBinding.inflate(layoutInflater)
-        rootLayout = screenBinding.rootLayout
+        rootLayout = FrameLayout(this)
+        navigatorContainerIdentifier = View.generateViewId()
+        rootLayout.addView(
+            FragmentContainerView(this).apply { id = navigatorContainerIdentifier },
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
         appearanceController = EpubAppearanceController(
             activity = this,
             settings = readerSettings,
@@ -171,30 +174,38 @@ class ReadiumEpubActivity : FragmentActivity() {
                 jumpForward = ::advanceToNextJump
             )
         )
-        topControls = screenBinding.topControlsHost.apply {
-            addView(controlsController.createTopControls(), FrameLayout.LayoutParams(-1, -2))
-        }
-        bottomControls = screenBinding.bottomControlsHost.apply {
-            addView(controlsController.createBottomControls(), FrameLayout.LayoutParams(-1, -2))
-        }
-        compactProgressSlider = screenBinding.compactProgressHost.apply {
-            addView(controlsController.createCompactProgress(), FrameLayout.LayoutParams(-1, -1))
-        }
-        settingsPanel = screenBinding.settingsPanelHost.apply {
-            addView(buildSettingsPanel(), FrameLayout.LayoutParams(-1, -1))
+        topControls = controlsController.createTopControls()
+        rootLayout.addView(topControls, overlayLayoutParams(-1, -2, Gravity.TOP))
+        bottomControls = controlsController.createBottomControls()
+        rootLayout.addView(bottomControls, overlayLayoutParams(-1, -2, Gravity.BOTTOM))
+        compactProgressSlider = controlsController.createCompactProgress().apply {
+            contentDescription = "Desplazarse por el libro"
             visibility = View.GONE
         }
-        contentsPanel = screenBinding.contentsPanelHost.apply {
-            layoutParams = (layoutParams as FrameLayout.LayoutParams).apply {
-                width = (resources.displayMetrics.widthPixels * .88f).toInt()
+        rootLayout.addView(
+            compactProgressSlider,
+            overlayLayoutParams(-1, dp(18), Gravity.BOTTOM).apply {
+                marginStart = dp(26)
+                marginEnd = dp(26)
+                bottomMargin = dp(2)
             }
-            addView(buildContentsPanel(), FrameLayout.LayoutParams(-1, -1))
-            visibility = View.GONE
-        }
-        searchPanel = screenBinding.searchPanelHost.apply {
-            addView(buildSearchPanel(), FrameLayout.LayoutParams(-1, -2))
-            visibility = View.GONE
-        }
+        )
+        settingsPanel = buildSettingsPanel().apply { visibility = View.GONE }
+        rootLayout.addView(settingsPanel, overlayLayoutParams(dp(340), -1, Gravity.END))
+        contentsPanel = buildContentsPanel().apply { visibility = View.GONE }
+        rootLayout.addView(
+            contentsPanel,
+            overlayLayoutParams((resources.displayMetrics.widthPixels * .88f).toInt(), -1, Gravity.START)
+        )
+        searchPanel = buildSearchPanel().apply { visibility = View.GONE }
+        rootLayout.addView(
+            searchPanel,
+            overlayLayoutParams(-1, -2, Gravity.TOP).apply {
+                marginStart = dp(12)
+                topMargin = dp(72)
+                marginEnd = dp(12)
+            }
+        )
         panelCoordinator = ReaderPanelCoordinator(
             mapOf(
                 ReaderPanel.SETTINGS to settingsPanel,
@@ -209,6 +220,9 @@ class ReadiumEpubActivity : FragmentActivity() {
         readerWindow.applySystemBarPadding(rootLayout, topControls, bottomControls, settingsPanel, contentsPanel)
         return rootLayout
     }
+
+    private fun overlayLayoutParams(width: Int, height: Int, gravity: Int) =
+        FrameLayout.LayoutParams(width, height, gravity)
 
     private fun showEpubMoreMenu() {
         val options = arrayOf("Buscar", "Índice", "Citas", if (database.hasEffectiveDictionaryEntries(document.identifier)) "Diccionario" else "Crear diccionario", "Agregar o quitar marcador")
@@ -316,7 +330,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
             )
             supportFragmentManager.commitNow {
-                replace(screenBinding.navigatorContainer.id, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG)
+                replace(navigatorContainerIdentifier, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG)
             }
             navigator = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as EpubNavigatorFragment
             refreshDictionaryButton()

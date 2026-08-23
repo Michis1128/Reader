@@ -22,14 +22,14 @@ Decisiones que no deben revertirse sin una solicitud explícita:
 - Paquete: `com.michis.reader`.
 - Android mínimo: API 26.
 - `compileSdk` y `targetSdk`: 36.
-- UI actual: layouts XML, View Binding y componentes creados dinámicamente donde aún es necesario.
+- UI actual: Jetpack Compose con Material 3. El lector conserva un `FragmentContainerView` creado programáticamente como host del navegador oficial de Readium.
 - Lector: Readium Kotlin Toolkit 3.2.0.
 - Persistencia: SQLite mediante `ReaderDatabase` y repositorios especializados.
 - Trabajo en segundo plano: WorkManager.
 - Selector de color: `KvColorPickerOverlay`, respaldado por KvColorPicker Android 3.0.1.
 - Inicio de sesión: Credential Manager/Google ID; autorización de Drive separada del inicio de sesión.
 
-Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Binding. No migres una pantalla a Compose como parte incidental de otro cambio.
+Compose es la tecnología de interfaz vigente. No reincorpores layouts XML o View Binding como parte incidental de otro cambio.
 
 ## 3. Mapa del código
 
@@ -79,9 +79,9 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - `theme/AppThemePalette.kt`: paleta global, contraste, fondos y estilo recursivo.
 - `theme/ReadingThemePalette.kt`: temas disponibles para el contenido EPUB.
 - `theme/KvColorPickerOverlay.kt`: único punto de entrada para escoger colores.
-- `ui/ScreenHeader.kt`: encabezado fijo y regreso visible.
+- `ui/compose/MichisReaderComponents.kt`: encabezado fijo, regreso visible y componentes compartidos.
 - `ui/SystemBarInsets.kt`: aplicación compartida de barras del sistema y notch en actividades normales; no dupliques listeners de insets por pantalla.
-- `ui/LimitedHeightSpinner.kt`: desplegable temático con altura limitada. Debe conservar constructores compatibles con inflación XML.
+- `ui/LimitedHeightSpinner.kt`: compatibilidad histórica pendiente de limpieza; no usar para pantallas nuevas en Compose.
 
 ### Google Drive y sincronización
 
@@ -196,15 +196,15 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 
 - Todas las actividades normales deben mantener encabezado y regreso visibles durante scroll. La excepción es el lector cuando oculta controles.
 - El contenido desplazable no debe dibujarse encima de la barra de estado, salvo la experiencia inmersiva intencional del lector.
-- Usa los estilos compartidos de `styles.xml`, dimensiones de `dimens.xml`, layouts reutilizables y View Binding.
+- Usa `MichisReaderComposeTheme` y los componentes compartidos de `ui/compose`.
 - Mantén separación entre botones; no deben tocarse. Evita controles tan grandes que oculten acciones en teléfonos verticales.
-- Todos los botones XML usan `Widget.MichisReader.Button`; los creados dinámicamente reciben la misma geometría mediante `AppThemePalette`. Su forma es de píldora, con radio de 24 dp y altura mínima de 48 dp.
-- Inputs y spinners usan radio de 16 dp, borde temático y los márgenes compartidos de `dimens.xml`. No agregues controles visualmente aislados con formas o separaciones propias sin una razón funcional.
+- Los botones Compose usan `MichisReaderButton`: forma de píldora, radio de 24 dp y altura mínima de 48 dp.
+- Inputs y desplegables Compose usan radio de 16 dp, borde temático y espaciado coherente con los componentes compartidos. No agregues controles visualmente aislados sin una razón funcional.
 - Usa `ui_component_margin_horizontal`, `ui_component_margin_vertical` y las variantes `ui_content_spacing*` para separar componentes; evita nuevos márgenes arbitrarios codificados directamente.
 - Los paneles editables usan tarjetas/rectángulos redondeados con padding interno; títulos de sección quedan fuera cuando así está establecido.
 - Antes de aplicar `AppThemePalette.apply(activity)`, marca fondos especiales con `markBackground`, `markSurface` o `markCard`.
 - Las vistas añadidas después del primer render deben volver a recibir el tema, normalmente con `content.post { AppThemePalette.apply(activity) }`.
-- No fijes fondos crema, blancos o negros en Kotlin/XML si deben responder al tema. Usa la paleta y contraste dinámico.
+- No fijes fondos crema, blancos o negros en Kotlin si deben responder al tema. Usa la paleta y contraste dinámico.
 - El texto debe obtener contraste suficiente sobre cada fondo. No derives el color del texto suponiendo que todos los temas son claros.
 - Para colores personalizados usa solamente `KvColorPickerOverlay.show(...)`. No reincorpores sliders RGB/HSV ni otro selector paralelo.
 - La identidad visual usa `ic_michis_reader_mark`, el icono adaptativo `ic_launcher` y su capa `monochrome`. Conserva las variantes clara/nocturna y la capa monocromática para iconos temáticos; no reemplaces el launcher por un PNG plano con bordes blancos.
@@ -221,7 +221,7 @@ Para cambios de sincronización, lee completos antes de editar: `IncrementalLibr
 6. Mantén callbacks de UI pequeños y delega persistencia/mezcla en repositorios.
 7. Si agregas una preferencia global, centraliza clave y valor predeterminado en `ReaderSettingsRepository`.
 8. Si agregas una Activity, regístrala en el manifest, aplica insets, encabezado y tema global.
-9. Si agregas una vista XML, usa View Binding y verifica que cualquier vista personalizada tenga constructores XML válidos.
+9. Si agregas una pantalla o control visual, impleméntalo en Compose y reutiliza el tema y los componentes compartidos.
 10. Si una decisión se pospone explícitamente, agrégala a `cambios_futuro.md`, no la implementes parcialmente.
 
 ## 8. Acciones que requieren especial cuidado
