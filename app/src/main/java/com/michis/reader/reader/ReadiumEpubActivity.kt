@@ -6,8 +6,6 @@ import com.michis.reader.R
 import com.michis.reader.annotations.*
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityReadiumEpubBinding
-import com.michis.reader.databinding.ViewEpubBottomControlsBinding
-import com.michis.reader.databinding.ViewEpubTopControlsBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
@@ -56,8 +54,9 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
     private lateinit var rootLayout: FrameLayout
-    private lateinit var topControls: LinearLayout
-    private lateinit var bottomControls: LinearLayout
+    private lateinit var topControls: View
+    private lateinit var bottomControls: View
+    private lateinit var controlsController: EpubReaderControls
     private lateinit var settingsPanel: View
     private lateinit var settingsController: EpubReadingSettingsPanel
     private lateinit var contentsPanel: View
@@ -65,14 +64,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var searchController: EpubSearchController
     private lateinit var panelCoordinator: ReaderPanelCoordinator
     private lateinit var contentsController: EpubContentsPanel
-    private lateinit var progressSlider: SeekBar
-    private lateinit var compactProgressSlider: SeekBar
-    private lateinit var progressLabel: TextView
-    private lateinit var dictionaryButton: Button
-    private lateinit var pageJumpActions: LinearLayout
-    private lateinit var jumpBackButton: Button
-    private lateinit var clearJumpHistoryButton: Button
-    private lateinit var jumpForwardButton: Button
+    private lateinit var compactProgressSlider: View
     private lateinit var navigator: EpubNavigatorFragment
     private lateinit var appearanceController: EpubAppearanceController
     private var controlsAreVisible = true
@@ -158,10 +150,36 @@ class ReadiumEpubActivity : FragmentActivity() {
             applyMenuColors = ::applyMenuColors
         )
         rootLayout.setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
-        topControls = configureTopControls(screenBinding.screenTopControls)
-        bottomControls = configureBottomControls(screenBinding.screenBottomControls)
-        compactProgressSlider = screenBinding.compactProgressSlider
-        configureCompactProgressSlider()
+        controlsController = EpubReaderControls(
+            activity = this,
+            documentTitle = document.title,
+            landscapeLayout = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
+            actions = EpubReaderControls.Actions(
+                goBack = ::finish,
+                showTools = ::showEpubMoreMenu,
+                showContents = ::toggleContentsPanel,
+                showSearch = ::toggleSearchPanel,
+                showQuotes = ::openBookQuotes,
+                showDictionary = ::openDictionary,
+                toggleBookmark = ::saveCurrentBookmark,
+                showReadingSettings = ::toggleSettingsPanel,
+                beginProgressChange = ::beginProgressChange,
+                changeProgress = ::changeProgress,
+                finishProgressChange = ::finishProgressChange,
+                jumpBack = ::returnToPreviousJump,
+                clearJumpHistory = ::clearPageJumpHistory,
+                jumpForward = ::advanceToNextJump
+            )
+        )
+        topControls = screenBinding.topControlsHost.apply {
+            addView(controlsController.createTopControls(), FrameLayout.LayoutParams(-1, -2))
+        }
+        bottomControls = screenBinding.bottomControlsHost.apply {
+            addView(controlsController.createBottomControls(), FrameLayout.LayoutParams(-1, -2))
+        }
+        compactProgressSlider = screenBinding.compactProgressHost.apply {
+            addView(controlsController.createCompactProgress(), FrameLayout.LayoutParams(-1, -1))
+        }
         settingsPanel = screenBinding.settingsPanelHost.apply {
             addView(buildSettingsPanel(), FrameLayout.LayoutParams(-1, -1))
             visibility = View.GONE
@@ -192,23 +210,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         return rootLayout
     }
 
-    private fun configureTopControls(binding: ViewEpubTopControlsBinding): LinearLayout {
-        binding.documentTitle.text = document.title
-        binding.backButton.setOnClickListener { finish() }
-        binding.toolsButton.setOnClickListener { showEpubMoreMenu() }
-        binding.contentsButton.setOnClickListener { toggleContentsPanel() }
-        binding.searchButton.setOnClickListener { toggleSearchPanel() }
-        binding.quotesButton.setOnClickListener { openBookQuotes() }
-        dictionaryButton = binding.dictionaryButton.apply { setOnClickListener { openDictionary() } }
-        binding.bookmarkButton.setOnClickListener { saveCurrentBookmark() }
-        binding.readingSettingsButton.setOnClickListener { toggleSettingsPanel() }
-        val landscapeLayout = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        binding.toolsButton.visibility = if (landscapeLayout) View.GONE else View.VISIBLE
-        binding.landscapeToolsContainer.visibility = if (landscapeLayout) View.VISIBLE else View.GONE
-        binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
-        return binding.root
-    }
-
     private fun showEpubMoreMenu() {
         val options = arrayOf("Buscar", "Índice", "Citas", if (database.hasEffectiveDictionaryEntries(document.identifier)) "Diccionario" else "Crear diccionario", "Agregar o quitar marcador")
         AlertDialog.Builder(this).setTitle("Herramientas").setItems(options) { _, index ->
@@ -222,56 +223,20 @@ class ReadiumEpubActivity : FragmentActivity() {
         }.show()
     }
 
-    private fun configureBottomControls(binding: ViewEpubBottomControlsBinding): LinearLayout {
-        progressLabel = binding.progressLabel
-        progressSlider = binding.progressSlider
-        pageJumpActions = binding.pageJumpActions
-        jumpBackButton = binding.jumpBackButton.apply { setOnClickListener { returnToPreviousJump() } }
-        clearJumpHistoryButton = binding.clearJumpHistoryButton.apply { setOnClickListener { clearPageJumpHistory() } }
-        jumpForwardButton = binding.jumpForwardButton.apply { setOnClickListener { advanceToNextJump() } }
-        progressSlider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onStartTrackingTouch(seekBar: SeekBar) {
-                userIsDraggingProgress = true
-                sliderJumpOriginPage = currentPageIndex()
-            }
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    progressLabel.text = "Página ${progress + 1} de ${pagePositions.size.coerceAtLeast(1)}"
-                    navigateToPage(progress, animated = false)
-                }
-            }
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                userIsDraggingProgress = false
-                sliderJumpOriginPage?.let { recordPageJump(it, seekBar.progress) }
-                sliderJumpOriginPage = null
-                navigateToPage(seekBar.progress)
-            }
-        })
-        binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
-        return binding.root
+    private fun beginProgressChange() {
+        userIsDraggingProgress = true
+        sliderJumpOriginPage = currentPageIndex()
     }
 
-    private fun configureCompactProgressSlider() = compactProgressSlider.apply {
-        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onStartTrackingTouch(seekBar: SeekBar) {
-                userIsDraggingProgress = true
-                sliderJumpOriginPage = currentPageIndex()
-            }
+    private fun changeProgress(pageIndex: Int) {
+        navigateToPage(pageIndex, animated = false)
+    }
 
-            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                if (!fromUser) return
-                progressSlider.progress = progress
-                navigateToPage(progress, animated = false)
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar) {
-                userIsDraggingProgress = false
-                progressSlider.progress = seekBar.progress
-                sliderJumpOriginPage?.let { recordPageJump(it, seekBar.progress) }
-                sliderJumpOriginPage = null
-                navigateToPage(seekBar.progress)
-            }
-        })
+    private fun finishProgressChange(pageIndex: Int) {
+        userIsDraggingProgress = false
+        sliderJumpOriginPage?.let { recordPageJump(it, pageIndex) }
+        sliderJumpOriginPage = null
+        navigateToPage(pageIndex)
     }
 
     private fun buildSettingsPanel(): View {
@@ -355,8 +320,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
             navigator = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as EpubNavigatorFragment
             refreshDictionaryButton()
-            progressSlider.max = (pagePositions.size - 1).coerceAtLeast(1)
-            compactProgressSlider.max = progressSlider.max
+            controlsController.configurePageCount(pagePositions.size)
             contentsController.populate(document.title, opened.tableOfContents)
             observeProgress()
             decorationController.attach(opened, navigator)
@@ -465,14 +429,14 @@ class ReadiumEpubActivity : FragmentActivity() {
                 applyMenuColors(ReadingThemePalette.colors(selectedTheme))
             }
         }
-        if (::database.isInitialized && ::document.isInitialized && ::dictionaryButton.isInitialized) {
+        if (::database.isInitialized && ::document.isInitialized && ::controlsController.isInitialized) {
             refreshDictionaryButton()
             if (::navigator.isInitialized) lifecycleScope.launch { decorationController.refreshAll() }
         }
     }
 
     private fun refreshDictionaryButton() {
-        dictionaryButton.text = decorationController.dictionaryButtonLabel()
+        controlsController.updateDictionaryLabel(decorationController.dictionaryButtonLabel())
     }
 
     private fun openDictionary() {
@@ -526,7 +490,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             .putExtra(QuoteColorActivity.EXTRA_TEXT, selectedText)
             .putExtra(QuoteColorActivity.EXTRA_LOCATION, firstLocator.locations.position ?: 0)
             .putExtra(QuoteColorActivity.EXTRA_LOCATOR_JSON, locatorJson)
-            .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, progressSlider.progress + 1))
+            .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, controlsController.currentPageIndex + 1))
     }
 
     private fun observeProgress() {
@@ -537,9 +501,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                     database.updateProgress(document.identifier, locator.locations.position ?: 0, progression.toFloat())
                     val pageIndex = ((locator.locations.position ?: 1) - 1).coerceIn(0, (pagePositions.size - 1).coerceAtLeast(0))
                     if (navigationHistory.confirmArrival(pageIndex)) updatePageJumpActions()
-                    if (!userIsDraggingProgress) progressSlider.progress = pageIndex
-                    if (!userIsDraggingProgress) compactProgressSlider.progress = pageIndex
-                    if (!userIsDraggingProgress) progressLabel.text = "Página ${pageIndex + 1} de ${pagePositions.size.coerceAtLeast(1)}"
+                    if (!userIsDraggingProgress) controlsController.updateProgress(pageIndex)
                 }
             }
         }
@@ -550,8 +512,8 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     private fun currentPageIndex(): Int {
-        if (!::navigator.isInitialized || pagePositions.isEmpty()) return progressSlider.progress
-        val position = navigator.currentLocator.value.locations.position ?: return progressSlider.progress
+        if (!::navigator.isInitialized || pagePositions.isEmpty()) return controlsController.currentPageIndex
+        val position = navigator.currentLocator.value.locations.position ?: return controlsController.currentPageIndex
         return (position - 1).coerceIn(0, pagePositions.lastIndex)
     }
 
@@ -580,19 +542,9 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     private fun updatePageJumpActions() {
-        if (!::pageJumpActions.isInitialized) return
         val backPage = navigationHistory.previousPageIndex
         val forwardPage = navigationHistory.nextPageIndex
-        jumpBackButton.apply {
-            visibility = if (backPage == null) View.INVISIBLE else View.VISIBLE
-            if (backPage != null) text = "Regresar a página ${backPage + 1}"
-        }
-        clearJumpHistoryButton.visibility = if (navigationHistory.hasNavigation) View.VISIBLE else View.GONE
-        jumpForwardButton.apply {
-            visibility = if (forwardPage == null) View.INVISIBLE else View.VISIBLE
-            if (forwardPage != null) text = "Avanzar a página ${forwardPage + 1}"
-        }
-        pageJumpActions.visibility = if (navigationHistory.hasNavigation) View.VISIBLE else View.GONE
+        controlsController.updateJumpHistory(backPage, forwardPage, navigationHistory.hasNavigation)
     }
 
     private fun navigateOnePage(direction: Int) {
@@ -659,7 +611,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         } else {
             val markerColor = runCatching { Color.parseColor(readerSettings.preferences.getString(ReaderSettingsRepository.KEY_BOOKMARK_COLOR, ReaderSettingsRepository.DEFAULT_BOOKMARK_COLOR)) }
                 .getOrDefault(Color.rgb(244, 180, 0))
-            database.addAnnotation(document.identifier, "marcador", locator.title.orEmpty(), "", markerColor, location, progressSlider.progress + 1)
+            database.addAnnotation(document.identifier, "marcador", locator.title.orEmpty(), "", markerColor, location, controlsController.currentPageIndex + 1)
             Toast.makeText(this, "Marcador agregado a esta página", Toast.LENGTH_SHORT).show()
         }
     }
@@ -731,6 +683,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         if (::searchController.isInitialized) searchController.refreshTheme()
         if (::contentsController.isInitialized) contentsController.refreshTheme()
         if (::settingsController.isInitialized) settingsController.refreshTheme()
+        if (::controlsController.isInitialized) controlsController.refreshTheme()
         readerWindow.updateSystemBarContrast(palette.surface)
     }
 
