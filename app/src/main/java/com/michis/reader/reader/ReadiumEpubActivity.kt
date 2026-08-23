@@ -59,6 +59,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var topControls: LinearLayout
     private lateinit var bottomControls: LinearLayout
     private lateinit var settingsPanel: View
+    private lateinit var settingsController: EpubReadingSettingsPanel
     private lateinit var contentsPanel: View
     private lateinit var searchPanel: View
     private lateinit var searchController: EpubSearchController
@@ -273,17 +274,24 @@ class ReadiumEpubActivity : FragmentActivity() {
         })
     }
 
-    private fun buildSettingsPanel(): View = EpubReadingSettingsPanel(
-        activity = this,
-        settings = readerSettings,
-        submitPreferences = appearanceController::submit,
-        selectTheme = appearanceController::applyReadingTheme,
-        selectFont = appearanceController::showFontSelection,
-        closePanel = { settingsPanel.visibility = View.GONE },
-        themeOptionsVisibilityChanged = { optionsVisible ->
-            settingsPanel.visibility = if (optionsVisible) View.INVISIBLE else View.VISIBLE
-        }
-    ).create()
+    private fun buildSettingsPanel(): View {
+        settingsController = EpubReadingSettingsPanel(
+            activity = this,
+            settings = readerSettings,
+            submitPreferences = appearanceController::submit,
+            selectTheme = appearanceController::applyReadingTheme,
+            selectFont = appearanceController::showFontSelection,
+            closePanel = { settingsPanel.visibility = View.GONE },
+            themeOptionsVisibilityChanged = { optionsVisible ->
+                if (optionsVisible) {
+                    settingsPanel.setBackgroundColor(Color.TRANSPARENT)
+                } else {
+                    applyMenuColors(ReadingThemePalette.colors(readerSettings.theme))
+                }
+            }
+        )
+        return settingsController.create()
+    }
 
     private fun buildSearchPanel(): View {
         searchController = EpubSearchController(
@@ -722,6 +730,7 @@ class ReadiumEpubActivity : FragmentActivity() {
         )
         if (::searchController.isInitialized) searchController.refreshTheme()
         if (::contentsController.isInitialized) contentsController.refreshTheme()
+        if (::settingsController.isInitialized) settingsController.refreshTheme()
         readerWindow.updateSystemBarContrast(palette.surface)
     }
 
