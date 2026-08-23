@@ -1,31 +1,58 @@
 package com.michis.reader.settings
 
-import com.michis.reader.R
-import com.michis.reader.databinding.ViewSettingsSectionBinding
-import com.michis.reader.databinding.ViewSettingsFieldBinding
-import com.michis.reader.databinding.ActivitySettingsBinding
-import com.michis.reader.databinding.ViewHexColorEditorBinding
-import com.michis.reader.databinding.ViewActionButtonBinding
-import com.michis.reader.databinding.ViewSettingsDescriptionBinding
-import com.michis.reader.databinding.ViewSettingsToggleBinding
-import com.michis.reader.databinding.ViewVerticalContainerBinding
 import com.michis.reader.spen.SpenControlPreferences
-import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
-import com.michis.reader.theme.*
-import com.michis.reader.ui.LimitedHeightSpinner
-import com.michis.reader.ui.ScreenHeader
-import com.michis.reader.ui.SystemBarInsets
+import com.michis.reader.theme.KvColorPickerOverlay
+import com.michis.reader.theme.ReadingThemePalette
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
+import com.michis.reader.ui.compose.MichisReaderButton
+import com.michis.reader.ui.compose.MichisReaderCard
+import com.michis.reader.ui.compose.MichisReaderInputShape
+import com.michis.reader.ui.compose.MichisReaderScreenHeader
 
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.content.Intent
-import android.os.Bundle
+import android.graphics.Color as AndroidColor
 import android.os.Build
-import android.text.InputFilter
-import android.text.InputType
-import android.view.View
-import android.widget.*
+import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import com.samsung.android.sdk.penremote.SpenRemote
 import com.samsung.android.sdk.penremote.SpenUnitManager
 
@@ -37,165 +64,38 @@ class SettingsActivity : ComponentActivity() {
             startActivity(Intent(this, SettingsActivity::class.java).putExtra(EXTRA_ADVANCED_SYNC, true))
         }
     }
-    private val readingModes = ReadingThemePalette.names
+    private var themeRevision by mutableIntStateOf(0)
+    private var spenDiagnostic by mutableStateOf("Diagnóstico todavía no ejecutado")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val screen = if (advancedSyncMode) buildAdvancedSyncScreen() else buildSettingsScreen()
-        val binding = ActivitySettingsBinding.inflate(layoutInflater)
-        AppThemePalette.markBackground(binding.rootContainer)
-        ScreenHeader.configure(
-            this,
-            binding.screenHeader,
-            if (advancedSyncMode) "Drive avanzado" else getString(R.string.settings_title)
-        ) { finish() }
-        binding.contentContainer.addView(screen, FrameLayout.LayoutParams(-1, -2))
-        SystemBarInsets.apply(binding.rootContainer)
-        setContentView(binding.root)
-        AppThemePalette.apply(this)
-    }
-
-    private fun buildAdvancedSyncScreen() = verticalContainer().apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
-        addView(description("Estas opciones cambian la vinculación técnica de Drive. La sincronización cotidiana puede hacerse desde la biblioteca."))
-        addView(settingsSection(null) { addView(googleAccountPanel()) })
-    }
-
-    private fun buildSettingsScreen() = verticalContainer().apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(18)); AppThemePalette.markBackground(this)
-        addView(settingsSection("Cuenta y sincronización") {
-            addView(googleAccountPanel())
-        })
-        addView(settingsSection("Lectura y modos rápidos") {
-            addView(description("Con los controles ocultos, toca la esquina superior izquierda para alternar únicamente entre estos dos temas."))
-            addView(settingsField("Tema global", globalThemeSpinner()))
-            addView(settingsField("Modo rápido 1 (predeterminado: Día)", modeSpinner(0)))
-            addView(settingsField("Modo rápido 2 (predeterminado: Noche)", modeSpinner(1)))
-            addView(settingsField("Tiempo de pantalla activa", screenTimeoutSpinner()))
-        })
-        addView(settingsSection("Apariencia de menús") {
-            val customColorControls = verticalContainer().apply {
-                addView(settingsField("Color personalizado", hexColorEditor("menu_custom_color", "#FFF4E0")))
-                visibility = if (normalizedMenuColorMode() == "custom") View.VISIBLE else View.GONE
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContent {
+            key(themeRevision) {
+                MichisReaderComposeTheme {
+                    SettingsScreen(
+                        advancedMode = advancedSyncMode,
+                        readerSettings = readerSettings,
+                        drivePanel = { DrivePanel(driveSettingsSection) },
+                        navigateBack = ::finish,
+                        refreshTheme = { themeRevision += 1 },
+                        chooseColor = ::chooseColor,
+                        restoreSpen = ::restoreDefaultSpenActions,
+                        diagnoseSpen = ::diagnoseSpen,
+                        spenDiagnostic = spenDiagnostic,
+                        openResetBooks = { startActivity(Intent(this, ResetBooksActivity::class.java)) }
+                    )
+                }
             }
-            addView(settingsField("Color de los menús", menuColorSpinner { mode ->
-                customColorControls.visibility = if (mode == "custom") View.VISIBLE else View.GONE
-                AppThemePalette.apply(this@SettingsActivity)
-            }))
-            addView(customColorControls)
-        })
-        addView(settingsSection("Diccionarios") {
-            addView(settingsField("Color de resaltado", hexColorEditor("dictionary_highlight_color", "#665A7D9A")))
-        })
-        addView(settingsSection("Citas") {
-            addView(description("Color predeterminado para las nuevas citas. Podrás cambiarlo al guardar o editar cada cita."))
-            addView(settingsField("Color predeterminado", hexColorEditor("quote_default_color", "#66FFD54F")))
-        })
-        addView(settingsSection("Marcadores") {
-            addView(description("Personaliza cómo se identifican los puntos guardados dentro de cada libro."))
-            addView(settingsField("Color de marcador", hexColorEditor("bookmark_color", "#FF8D6E63")))
-            addView(settingsToggle("Permitir marcador tocando la esquina") {
-                isChecked = readerSettings.cornerBookmarkEnabled
-                setOnCheckedChangeListener { _, checked -> readerSettings.cornerBookmarkEnabled = checked }
-            })
-        })
-        addView(settingsSection("Comandos aéreos del S Pen") {
-            addView(description("Los gestos solo se reconocen mientras mantienes presionado el botón del S Pen."))
-            SpenControlPreferences.gestures.forEach { gesture ->
-                addView(settingsField(gesture.label, spenActionSpinner(gesture)))
-            }
-            addView(settingsAction("Restaurar comandos predeterminados") {
-                setOnClickListener { restoreDefaultSpenActions(); Toast.makeText(context, "Comandos restaurados", Toast.LENGTH_SHORT).show(); recreate() }
-            })
-            val result = description("Diagnóstico todavía no ejecutado")
-            addView(settingsAction("Comprobar compatibilidad del S Pen") {
-                setOnClickListener { diagnoseSpen(result) }
-            })
-            addView(result)
-        })
-        addView(settingsSection("Almacenamiento y privacidad") {
-            addView(settingsAction("Reiniciar libros…") {
-                setOnClickListener { startActivity(Intent(this@SettingsActivity, ResetBooksActivity::class.java)) }
-            })
-            addView(description("Los libros EPUB permanecen en el dispositivo. La aplicación no envía archivos ni incluye telemetría."))
-        })
-    }
-
-    private fun googleAccountPanel(): View = driveSettingsSection.createPanel()
-
-    private fun verticalContainer() = ViewVerticalContainerBinding.inflate(layoutInflater).root
-
-
-
-
-
-
-
-    private fun modeSpinner(index: Int) = LimitedHeightSpinner(this).apply {
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, readingModes)
-        setSelection(readingModes.indexOf(readerSettings.quickMode(index)).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                readerSettings.setQuickMode(index, readingModes[position])
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
     }
 
-    private fun globalThemeSpinner() = LimitedHeightSpinner(this).apply {
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, ReadingThemePalette.names)
-        setSelection(ReadingThemePalette.names.indexOf(readerSettings.theme).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                readerSettings.theme = ReadingThemePalette.names[position]
-                if (readerSettings.menuColorMode == "theme") AppThemePalette.apply(this@SettingsActivity)
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-    }
-
-    private fun screenTimeoutSpinner() = LimitedHeightSpinner(this).apply {
-        val values = intArrayOf(2, 3, 5, 10, 15)
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, values.map { "$it minutos" })
-        setSelection(values.indexOf(readerSettings.screenTimeoutMinutes).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                readerSettings.screenTimeoutMinutes = values[position]
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-    }
-
-    private fun menuColorSpinner(onModeChanged: (String) -> Unit) = LimitedHeightSpinner(this).apply {
-        val labels = arrayOf("Tema claro", "Tema oscuro", "Acorde al tema actual", "Personalizado")
-        val values = arrayOf("light", "dark", "theme", "custom")
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, labels.toList())
-        setSelection(values.indexOf(normalizedMenuColorMode()).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                readerSettings.menuColorMode = values[position]; onModeChanged(values[position])
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-    }
-
-    private fun normalizedMenuColorMode(): String {
-        val stored = readerSettings.menuColorMode
-        if (!stored.startsWith("theme:")) return stored
-        val background = ReadingThemePalette.colors(stored.removePrefix("theme:")).first
-        return if (androidx.core.graphics.ColorUtils.calculateLuminance(background) < .45) "dark" else "light"
-    }
-
-    private fun spenActionSpinner(gesture: SpenControlPreferences.Gesture) = LimitedHeightSpinner(this).apply {
-        val preferences = readerSettings.preferences
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, SpenControlPreferences.actionLabels)
-        val selectedValue = preferences.getString(gesture.preferenceKey, gesture.defaultAction)
-        setSelection(SpenControlPreferences.actionValues.indexOf(selectedValue).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                preferences.edit().putString(gesture.preferenceKey, SpenControlPreferences.actionValues[position]).apply()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+    private fun chooseColor(preferenceKey: String, defaultColor: String) {
+        val current = parseColor(readerSettings.preferences.getString(preferenceKey, defaultColor))
+        KvColorPickerOverlay.show(this, current) { color ->
+            readerSettings.preferences.edit().putString(preferenceKey, String.format("#%08X", color)).apply()
+            themeRevision += 1
+            Toast.makeText(this, "Color aplicado", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -203,130 +103,252 @@ class SettingsActivity : ComponentActivity() {
         val editor = readerSettings.preferences.edit()
         SpenControlPreferences.gestures.forEach { editor.putString(it.preferenceKey, it.defaultAction) }
         editor.apply()
+        themeRevision += 1
+        Toast.makeText(this, "Comandos restaurados", Toast.LENGTH_SHORT).show()
     }
 
-    private fun diagnoseSpen(result: TextView) {
+    private fun diagnoseSpen() {
         val remote = SpenRemote.getInstance()
         val device = "${Build.MANUFACTURER} ${Build.MODEL}"
         val buttonAvailable = runCatching { remote.isFeatureEnabled(SpenRemote.FEATURE_TYPE_BUTTON) }.getOrDefault(false)
         val motionAvailable = runCatching { remote.isFeatureEnabled(SpenRemote.FEATURE_TYPE_AIR_MOTION) }.getOrDefault(false)
-        result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConectando…"
+        spenDiagnostic = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConectando…"
         if (!buttonAvailable && !motionAvailable) {
-            result.append("\nEl dispositivo o el S Pen no ofrece funciones remotas BLE."); return
+            spenDiagnostic += "\nEl dispositivo o el S Pen no ofrece funciones remotas BLE."
+            return
         }
         runCatching {
-            if (remote.isConnected) remote.disconnect(this@SettingsActivity)
-            remote.connect(this@SettingsActivity, object : SpenRemote.ConnectionResultCallback {
-                override fun onSuccess(manager: SpenUnitManager) {
-                    runOnUiThread {
-                        result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión al framework: Correcta"
-                        runCatching { remote.disconnect(this@SettingsActivity) }
-                    }
+            if (remote.isConnected) remote.disconnect(this)
+            remote.connect(this, object : SpenRemote.ConnectionResultCallback {
+                override fun onSuccess(manager: SpenUnitManager) = runOnUiThread {
+                    spenDiagnostic = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión al framework: Correcta"
+                    runCatching { remote.disconnect(this@SettingsActivity) }
                 }
-                override fun onFailure(error: Int) { runOnUiThread {
-                    result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión rechazada. Código: $error"
-                } }
+                override fun onFailure(error: Int) = runOnUiThread {
+                    spenDiagnostic = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión rechazada. Código: $error"
+                }
             })
-        }.onFailure { result.append("\nError: ${it.javaClass.simpleName}: ${it.message.orEmpty()}") }
+        }.onFailure { spenDiagnostic += "\nError: ${it.javaClass.simpleName}: ${it.message.orEmpty()}" }
     }
 
     private fun yesNo(value: Boolean) = if (value) "Disponible" else "No disponible"
-
-    private fun hexColorEditor(preferenceKey: String, defaultColor: String): View {
-        val preferences = readerSettings.preferences
-        val binding = ViewHexColorEditorBinding.inflate(layoutInflater)
-        val initialColor = parseColor(preferences.getString(preferenceKey, defaultColor))
-        val preview = binding.colorPreview.apply {
-            if (preferenceKey == "menu_custom_color") setCustomMenuColorPreview(this, initialColor)
-            else setBackgroundColor(initialColor)
-        }
-        val input = binding.hexInput.apply {
-            hint = defaultColor.removePrefix("#")
-            setText(preferences.getString(preferenceKey, defaultColor)?.removePrefix("#"))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setSingleLine()
-            filters = arrayOf(InputFilter.LengthFilter(8), InputFilter { source, _, _, _, _, _ -> source.filter { it in "0123456789abcdefABCDEF" } })
-        }
-        var pendingColor = parseColor(preferences.getString(preferenceKey, defaultColor))
-        var updating = false
-        input.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val text = s?.toString().orEmpty()
-                if (updating || text.length !in setOf(6, 8)) return
-                val normalized = if (text.length == 6) "FF$text" else text
-                runCatching { Color.parseColor("#$normalized") }.onSuccess { color ->
-                    pendingColor = color
-                    if (preferenceKey == "menu_custom_color") setCustomMenuColorPreview(preview, color) else preview.setBackgroundColor(color)
-                }
-            }
-            override fun afterTextChanged(s: android.text.Editable?) = Unit
-        })
-        preview.setOnClickListener {
-            KvColorPickerOverlay.show(this, pendingColor) { color ->
-                pendingColor = color
-                val hexadecimal = String.format("#%08X", color)
-                updating = true
-                input.setText(hexadecimal.removePrefix("#")); input.setSelection(input.length())
-                updating = false
-                if (preferenceKey == "menu_custom_color") setCustomMenuColorPreview(preview, color) else preview.setBackgroundColor(color)
-                preferences.edit().putString(preferenceKey, hexadecimal).apply()
-                if (preferenceKey == "menu_custom_color") AppThemePalette.apply(this)
-                Toast.makeText(this, "Color aplicado", Toast.LENGTH_SHORT).show()
-            }
-        }
-        return binding.root
-    }
-
-    private fun parseColor(value: String?) = runCatching { Color.parseColor(value) }.getOrDefault(0x665A7D9A)
-
-    private fun setCustomMenuColorPreview(preview: View, color: Int) {
-        val opaqueColor = if (Color.alpha(color) == 255) color else androidx.core.graphics.ColorUtils.compositeColors(
-            color, AppThemePalette.current(this).card
-        )
-        preview.background = GradientDrawable().apply {
-            setColor(color)
-            setStroke(dp(2), AppThemePalette.textFor(opaqueColor))
-            cornerRadius = dp(9).toFloat()
-        }
-        preview.elevation = dp(1).toFloat()
-    }
-
-    private fun settingsSection(title: String?, build: LinearLayout.() -> Unit): View {
-        val binding = ViewSettingsSectionBinding.inflate(layoutInflater)
-        binding.sectionTitle.apply {
-            text = title.orEmpty()
-            visibility = if (title.isNullOrBlank()) View.GONE else View.VISIBLE
-        }
-        binding.contentContainer.apply(build)
-        binding.contentContainer.elevation = dp(2).toFloat()
-        AppThemePalette.markCard(binding.contentContainer)
-        return binding.root
-    }
-
-    private fun settingsField(label: String, control: View): View {
-        val binding = ViewSettingsFieldBinding.inflate(layoutInflater)
-        binding.fieldLabel.text = label
-        binding.controlContainer.addView(control, FrameLayout.LayoutParams(-1, -2))
-        return binding.root
-    }
-    private fun settingsAction(value: String, configure: Button.() -> Unit): View {
-        val binding = ViewActionButtonBinding.inflate(layoutInflater)
-        binding.actionButton.text = value
-        binding.actionButton.configure()
-        return binding.root
-    }
-
-    private fun settingsToggle(value: String, configure: Switch.() -> Unit): View {
-        val binding = ViewSettingsToggleBinding.inflate(layoutInflater)
-        binding.toggleSwitch.text = value
-        binding.toggleSwitch.configure()
-        return binding.root
-    }
-
-    private fun description(value: String) =
-        ViewSettingsDescriptionBinding.inflate(layoutInflater).root.apply { text = value }
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun parseColor(value: String?) = runCatching { AndroidColor.parseColor(value) }.getOrDefault(0x665A7D9A)
 
     companion object { private const val EXTRA_ADVANCED_SYNC = "advanced_sync_settings" }
+}
+
+@Composable
+private fun SettingsScreen(
+    advancedMode: Boolean,
+    readerSettings: ReaderSettingsRepository,
+    drivePanel: @Composable () -> Unit,
+    navigateBack: () -> Unit,
+    refreshTheme: () -> Unit,
+    chooseColor: (String, String) -> Unit,
+    restoreSpen: () -> Unit,
+    diagnoseSpen: () -> Unit,
+    spenDiagnostic: String,
+    openResetBooks: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = { MichisReaderScreenHeader(if (advancedMode) "Drive avanzado" else "Configuración", navigateBack) }
+    ) { contentPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(contentPadding).navigationBarsPadding(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            if (advancedMode) {
+                item { SettingsDescription("Estas opciones cambian la vinculación técnica de Drive. La sincronización cotidiana puede hacerse desde la biblioteca.") }
+                item { SettingsFamily(null) { drivePanel() } }
+            } else {
+                item { SettingsFamily("Cuenta y sincronización") { drivePanel() } }
+                item { ReadingSettingsFamily(readerSettings, refreshTheme) }
+                item { MenuAppearanceFamily(readerSettings, refreshTheme, chooseColor) }
+                item { ColorFamily("Diccionarios", "Color de resaltado", "dictionary_highlight_color", "#665A7D9A", readerSettings, chooseColor) }
+                item {
+                    SettingsFamily("Citas") {
+                        SettingsDescription("Color predeterminado para las nuevas citas. Podrás cambiarlo al guardar o editar cada cita.")
+                        ColorSetting("Color predeterminado", "quote_default_color", "#66FFD54F", readerSettings, chooseColor)
+                    }
+                }
+                item {
+                    SettingsFamily("Marcadores") {
+                        SettingsDescription("Personaliza cómo se identifican los puntos guardados dentro de cada libro.")
+                        ColorSetting("Color de marcador", "bookmark_color", "#FF8D6E63", readerSettings, chooseColor)
+                        ToggleSetting("Permitir marcador tocando la esquina", readerSettings.cornerBookmarkEnabled) {
+                            readerSettings.cornerBookmarkEnabled = it
+                        }
+                    }
+                }
+                item { SpenSettingsFamily(readerSettings, restoreSpen, diagnoseSpen, spenDiagnostic, refreshTheme) }
+                item {
+                    SettingsFamily("Almacenamiento y privacidad") {
+                        MichisReaderButton("Reiniciar libros…", openResetBooks, Modifier.fillMaxWidth())
+                        SettingsDescription("Los libros EPUB permanecen en el dispositivo. La aplicación no envía archivos ni incluye telemetría.")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrivePanel(section: DriveSettingsSection) {
+    AndroidView(factory = { section.createPanel() }, modifier = Modifier.fillMaxWidth())
+}
+
+@Composable
+private fun ReadingSettingsFamily(settings: ReaderSettingsRepository, refreshTheme: () -> Unit) {
+    SettingsFamily("Lectura y modos rápidos") {
+        SettingsDescription("Con los controles ocultos, toca la esquina superior izquierda para alternar únicamente entre estos dos temas.")
+        DropdownSetting("Tema global", ReadingThemePalette.names.toList(), settings.theme) {
+            settings.theme = it
+            refreshTheme()
+        }
+        DropdownSetting("Modo rápido 1 (predeterminado: Día)", ReadingThemePalette.names.toList(), settings.quickMode(0)) { settings.setQuickMode(0, it) }
+        DropdownSetting("Modo rápido 2 (predeterminado: Noche)", ReadingThemePalette.names.toList(), settings.quickMode(1)) { settings.setQuickMode(1, it) }
+        val timeoutValues = listOf(2, 3, 5, 10, 15)
+        DropdownSetting("Tiempo de pantalla activa", timeoutValues.map { "$it minutos" }, "${settings.screenTimeoutMinutes} minutos") { label ->
+            settings.screenTimeoutMinutes = label.substringBefore(' ').toIntOrNull() ?: settings.screenTimeoutMinutes
+        }
+    }
+}
+
+@Composable
+private fun MenuAppearanceFamily(
+    settings: ReaderSettingsRepository,
+    refreshTheme: () -> Unit,
+    chooseColor: (String, String) -> Unit
+) {
+    val labels = listOf("Tema claro", "Tema oscuro", "Acorde al tema actual", "Personalizado")
+    val values = listOf("light", "dark", "theme", "custom")
+    var mode by remember { mutableStateOf(normalizedMenuMode(settings)) }
+    SettingsFamily("Apariencia de menús") {
+        DropdownSetting("Color de los menús", labels, labels[values.indexOf(mode).coerceAtLeast(0)]) { label ->
+            mode = values[labels.indexOf(label)]
+            settings.menuColorMode = mode
+            refreshTheme()
+        }
+        if (mode == "custom") ColorSetting("Color personalizado", "menu_custom_color", "#FFF4E0", settings, chooseColor)
+    }
+}
+
+private fun normalizedMenuMode(settings: ReaderSettingsRepository): String {
+    val stored = settings.menuColorMode
+    if (!stored.startsWith("theme:")) return stored
+    val background = ReadingThemePalette.colors(stored.removePrefix("theme:")).first
+    return if (androidx.core.graphics.ColorUtils.calculateLuminance(background) < .45) "dark" else "light"
+}
+
+@Composable
+private fun SpenSettingsFamily(
+    settings: ReaderSettingsRepository,
+    restore: () -> Unit,
+    diagnose: () -> Unit,
+    diagnostic: String,
+    refresh: () -> Unit
+) {
+    SettingsFamily("Comandos aéreos del S Pen") {
+        SettingsDescription("Los gestos solo se reconocen mientras mantienes presionado el botón del S Pen.")
+        SpenControlPreferences.gestures.forEach { gesture ->
+            val selectedValue = settings.preferences.getString(gesture.preferenceKey, gesture.defaultAction)
+            val selectedIndex = SpenControlPreferences.actionValues.indexOf(selectedValue).coerceAtLeast(0)
+            DropdownSetting(gesture.label, SpenControlPreferences.actionLabels.toList(), SpenControlPreferences.actionLabels[selectedIndex]) { label ->
+                val index = SpenControlPreferences.actionLabels.indexOf(label)
+                settings.preferences.edit().putString(gesture.preferenceKey, SpenControlPreferences.actionValues[index]).apply()
+            }
+        }
+        MichisReaderButton("Restaurar comandos predeterminados", restore, Modifier.fillMaxWidth())
+        MichisReaderButton("Comprobar compatibilidad del S Pen", diagnose, Modifier.fillMaxWidth())
+        SettingsDescription(diagnostic)
+    }
+}
+
+@Composable
+private fun ColorFamily(
+    title: String,
+    label: String,
+    key: String,
+    default: String,
+    settings: ReaderSettingsRepository,
+    chooseColor: (String, String) -> Unit
+) = SettingsFamily(title) { ColorSetting(label, key, default, settings, chooseColor) }
+
+@Composable
+private fun ColorSetting(
+    label: String,
+    preferenceKey: String,
+    defaultColor: String,
+    settings: ReaderSettingsRepository,
+    chooseColor: (String, String) -> Unit
+) {
+    val value = settings.preferences.getString(preferenceKey, defaultColor).orEmpty()
+    val color = runCatching { AndroidColor.parseColor(value) }.getOrDefault(AndroidColor.GRAY)
+    val preview = Color(color).compositeOver(MaterialTheme.colorScheme.surfaceVariant)
+    val content = if (preview.luminance() < .45f) Color.White else Color(0xFF151619)
+    Text(label, style = MaterialTheme.typography.labelLarge)
+    OutlinedButton(
+        onClick = { chooseColor(preferenceKey, defaultColor) },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+        shape = MichisReaderInputShape,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+            androidx.compose.material3.Surface(color = preview, contentColor = content, shape = RoundedCornerShape(10.dp)) {
+                Text(value, Modifier.fillMaxWidth().padding(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DropdownSetting(label: String, options: List<String>, selected: String, select: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    var current by remember(selected) { mutableStateOf(selected) }
+    Text(label, style = MaterialTheme.typography.labelLarge)
+    Box {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            shape = MichisReaderInputShape
+        ) { Text(current, modifier = Modifier.fillMaxWidth()) }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.heightIn(max = 240.dp)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(text = { Text(option) }, onClick = {
+                    current = option
+                    expanded = false
+                    select(option)
+                })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleSetting(label: String, checked: Boolean, change: (Boolean) -> Unit) {
+    var value by remember(checked) { mutableStateOf(checked) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, modifier = Modifier.weight(1f))
+        Switch(checked = value, onCheckedChange = { value = it; change(it) })
+    }
+}
+
+@Composable
+private fun SettingsFamily(title: String?, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!title.isNullOrBlank()) Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
+        MichisReaderCard { content() }
+    }
+}
+
+@Composable
+private fun SettingsDescription(value: String) {
+    Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
