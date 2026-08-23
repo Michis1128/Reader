@@ -1,6 +1,7 @@
 package com.michis.reader.app
 
 import com.michis.reader.R
+import com.michis.reader.annotations.BookmarksActivity
 import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityMainBinding
 import com.michis.reader.library.*
@@ -124,8 +125,10 @@ class MainActivity : ComponentActivity() {
         searchInput.addTextChangedListener(SimpleTextWatcher(::refreshCurrentSection))
         binding.libraryTabButton.setOnClickListener { openLibraryRoot() }
         binding.currentlyReadingTabButton.setOnClickListener { showCurrentlyReading() }
-        binding.quotesTabButton.setOnClickListener { showAnnotations("cita") }
-        binding.bookmarksTabButton.setOnClickListener { showAnnotations("marcador") }
+        binding.quotesTabButton.setOnClickListener { showQuotes() }
+        binding.bookmarksTabButton.setOnClickListener {
+            startActivity(Intent(this, BookmarksActivity::class.java))
+        }
         binding.dictionariesTabButton.setOnClickListener { showDictionaries() }
         libraryDisplayButton.setOnClickListener { cycleLibraryDisplayMode() }
         libraryFilterButton.setOnClickListener { showLibraryFilters() }
@@ -269,9 +272,9 @@ class MainActivity : ComponentActivity() {
         AppThemePalette.apply(this)
     }
 
-    private fun showAnnotations(kind: String) {
+    private fun showQuotes() {
         mainSection = MainSection.ANNOTATIONS
-        librarySections.showAnnotations(kind)
+        librarySections.showQuotes()
     }
 
     private fun showDictionaries() {
