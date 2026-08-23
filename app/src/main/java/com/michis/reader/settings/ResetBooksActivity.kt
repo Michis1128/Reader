@@ -1,157 +1,89 @@
 package com.michis.reader.settings
 
-import com.michis.reader.R
-import com.michis.reader.data.*
-import com.michis.reader.databinding.ActivityResetBooksBinding
-import com.michis.reader.databinding.ItemResetBookBinding
-import com.michis.reader.databinding.ViewEmptyStateBinding
+import com.michis.reader.data.LibraryDocument
+import com.michis.reader.data.ReaderDatabase
 import com.michis.reader.sync.AutomaticDriveSyncScheduler
-import com.michis.reader.sync.drive.*
-import com.michis.reader.theme.AppThemePalette
-import com.michis.reader.ui.ScreenHeader
-import com.michis.reader.ui.SystemBarInsets
+import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
+import com.michis.reader.sync.drive.GoogleDriveFolderRepository
+import com.michis.reader.sync.drive.OptionalGoogleAccountManager
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
+import com.michis.reader.ui.compose.MichisReaderButton
+import com.michis.reader.ui.compose.MichisReaderButtonRow
+import com.michis.reader.ui.compose.MichisReaderCard
+import com.michis.reader.ui.compose.MichisReaderInputShape
+import com.michis.reader.ui.compose.MichisReaderScreenHeader
 
-import android.app.AlertDialog
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.View
-import android.view.ViewGroup
-import android.widget.*
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
 class ResetBooksActivity : ComponentActivity() {
-    private lateinit var binding: ActivityResetBooksBinding
     private lateinit var database: ReaderDatabase
-    private lateinit var listContainer: LinearLayout
-    private lateinit var selectionStatus: TextView
-    private lateinit var queryInput: EditText
-    private val selectedIdentifiers = linkedSetOf<Long>()
-    private var allDocuments = emptyList<LibraryDocument>()
-    private var visibleDocuments = emptyList<LibraryDocument>()
-    private var sortMode = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         database = ReaderDatabase.getInstance(this)
-        allDocuments = database.findDocuments()
-        binding = ActivityResetBooksBinding.inflate(layoutInflater)
-        configureScreen()
-        setContentView(binding.root)
-        AppThemePalette.apply(this)
-        renderDocuments()
-    }
-
-    private fun configureScreen() {
-        AppThemePalette.markBackground(binding.rootContainer)
-        ScreenHeader.configure(this, binding.screenHeader, getString(R.string.reset_books_title)) { finish() }
-        binding.resetDescription.text =
-            "El libro se conservará, pero se borrarán su progreso, citas, notas, marcadores y diccionario."
-        queryInput = binding.queryInput
-        selectionStatus = binding.selectionStatus
-        listContainer = binding.listContainer
-        queryInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderDocuments()
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
-        binding.sortSpinner.apply {
-            adapter = themedSortAdapter(arrayOf("Título", "Autor", "Formato", "Abiertos recientemente"))
-            background = AppThemePalette.cardBackground(this@ResetBooksActivity, 12f)
-            setPopupBackgroundDrawable(android.graphics.drawable.ColorDrawable(AppThemePalette.current(this@ResetBooksActivity).surface))
-            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                    sortMode = position
-                    renderDocuments()
-                }
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContent {
+            MichisReaderComposeTheme {
+                ResetBooksScreen(
+                    documents = remember { database.findDocuments() },
+                    navigateBack = ::finish,
+                    resetDocuments = ::resetDocuments
+                )
             }
         }
-        binding.selectAllButton.setOnClickListener {
-            selectedIdentifiers += allDocuments.map { it.identifier }
-            renderDocuments()
-        }
-        binding.selectVisibleButton.setOnClickListener {
-            selectedIdentifiers += visibleDocuments.map { it.identifier }
-            renderDocuments()
-        }
-        binding.clearSelectionButton.setOnClickListener {
-            selectedIdentifiers.clear()
-            renderDocuments()
-        }
-        binding.resetSelectedButton.setOnClickListener { confirmReset() }
-        SystemBarInsets.apply(binding.rootContainer)
     }
 
-    private fun renderDocuments() {
-        if (!::listContainer.isInitialized || !::queryInput.isInitialized) return
-        val query = queryInput.text?.toString().orEmpty().trim()
-        visibleDocuments = allDocuments.filter {
-            query.isBlank() || listOf(it.title, it.author, it.format, it.fileName).any { value -> value.contains(query, ignoreCase = true) }
-        }.let { documents ->
-            when (sortMode) {
-                1 -> documents.sortedWith(compareBy<LibraryDocument> { it.author.ifBlank { "￿" }.lowercase() }.thenBy { it.title.lowercase() })
-                2 -> documents.sortedWith(compareBy<LibraryDocument> { it.format.lowercase() }.thenBy { it.title.lowercase() })
-                3 -> documents.sortedByDescending { it.lastOpenedAt }
-                else -> documents.sortedBy { it.title.lowercase() }
-            }
+    private fun resetDocuments(documents: List<LibraryDocument>) {
+        var completed = 0
+        documents.forEach { document ->
+            if (runCatching { database.resetBook(document.identifier) }.isSuccess) completed++
         }
-        listContainer.removeAllViews()
-        selectionStatus.text = "${selectedIdentifiers.size} seleccionados · ${visibleDocuments.size} resultados"
-        visibleDocuments.forEach { document ->
-            val itemBinding = ItemResetBookBinding.inflate(layoutInflater, listContainer, false)
-            itemBinding.bookCheckbox.apply {
-                text = buildString {
-                    append(document.title)
-                    append("\n${document.format}")
-                    if (document.author.isNotBlank()) append(" · ${document.author}")
-                }
-                isChecked = document.identifier in selectedIdentifiers
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selectedIdentifiers += document.identifier else selectedIdentifiers -= document.identifier
-                    selectionStatus.text = "${selectedIdentifiers.size} seleccionados · ${visibleDocuments.size} resultados"
-                }
-            }
-            AppThemePalette.markCard(itemBinding.bookCheckbox)
-            listContainer.addView(itemBinding.root)
-        }
-        if (visibleDocuments.isEmpty()) {
-            val emptyBinding = ViewEmptyStateBinding.inflate(layoutInflater, listContainer, false)
-            emptyBinding.root.text = "No se encontraron libros"
-            listContainer.addView(emptyBinding.root)
-        }
-        AppThemePalette.apply(this)
-    }
-
-    private fun confirmReset() {
-        val selected = allDocuments.filter { it.identifier in selectedIdentifiers }
-        if (selected.isEmpty()) { Toast.makeText(this, "Selecciona al menos un libro", Toast.LENGTH_SHORT).show(); return }
-        AlertDialog.Builder(this).setTitle("Reiniciar ${selected.size} libros")
-            .setMessage("Esta operación borrará los datos de lectura asociados y se sincronizará con Drive. Los archivos de los libros no se eliminarán.")
-            .setPositiveButton("Reiniciar") { _, _ ->
-                var completed = 0
-                selected.forEach { if (runCatching { database.resetBook(it.identifier) }.isSuccess) completed++ }
-                enqueueDriveSyncIfAvailable()
-                Toast.makeText(this, "$completed libros reiniciados", Toast.LENGTH_LONG).show()
-                finish()
-            }.setNegativeButton("Cancelar", null).show()
-    }
-
-    private fun themedSortAdapter(options: Array<String>) = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, options) {
-        override fun getView(position: Int, recycledView: View?, parent: ViewGroup): View =
-            themedOption(super.getView(position, recycledView, parent), AppThemePalette.current(this@ResetBooksActivity).card)
-
-        override fun getDropDownView(position: Int, recycledView: View?, parent: ViewGroup): View =
-            themedOption(super.getDropDownView(position, recycledView, parent), AppThemePalette.current(this@ResetBooksActivity).surface)
-
-        private fun themedOption(view: View, backgroundColor: Int): View = view.apply {
-            setBackgroundColor(backgroundColor)
-            (this as? TextView)?.apply {
-                setTextColor(AppThemePalette.textFor(backgroundColor))
-                setPadding(dp(16), dp(12), dp(16), dp(12))
-                textSize = 16f
-            }
-        }
+        enqueueDriveSyncIfAvailable()
+        Toast.makeText(this, "$completed libros reiniciados", Toast.LENGTH_LONG).show()
+        finish()
     }
 
     private fun enqueueDriveSyncIfAvailable() {
@@ -160,6 +92,221 @@ class ResetBooksActivity : ComponentActivity() {
         if (GoogleDriveFolderRepository(this).savedFolder(session.accountIdentifier) == null) return
         AutomaticDriveSyncScheduler(this).enqueueImmediateSync()
     }
+}
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+@Composable
+private fun ResetBooksScreen(
+    documents: List<LibraryDocument>,
+    navigateBack: () -> Unit,
+    resetDocuments: (List<LibraryDocument>) -> Unit
+) {
+    val context = LocalContext.current
+    var query by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
+    var sortMode by rememberSaveable { mutableStateOf(ResetBooksSortMode.TITLE) }
+    var selectedIdentifiers by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    var showResetConfirmation by rememberSaveable { mutableStateOf(false) }
+    val visibleDocuments = remember(documents, query.text, sortMode) {
+        filterAndSortResetDocuments(documents, query.text, sortMode)
+    }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = { MichisReaderScreenHeader("Reiniciar libros", navigateBack) }
+    ) { contentPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+        ) {
+            Text(
+                "El libro se conservará, pero se borrarán su progreso, citas, notas, marcadores y diccionario.",
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+            )
+            MichisReaderCard {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Buscar por título, autor o archivo EPUB") },
+                    singleLine = true,
+                    shape = MichisReaderInputShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Ordenar por", fontWeight = FontWeight.Bold)
+                ResetBooksSortSelector(sortMode) { sortMode = it }
+            }
+            Text(
+                "${selectedIdentifiers.size} seleccionados · ${visibleDocuments.size} resultados",
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp)
+            )
+            MichisReaderButton(
+                text = "Seleccionar todos los libros",
+                onClick = { selectedIdentifiers = documents.mapTo(mutableSetOf(), LibraryDocument::identifier) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            MichisReaderButtonRow {
+                MichisReaderButton(
+                    text = "Seleccionar visibles",
+                    onClick = {
+                        selectedIdentifiers = selectedIdentifiers + visibleDocuments.map(LibraryDocument::identifier)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                MichisReaderButton(
+                    text = "Limpiar",
+                    onClick = { selectedIdentifiers = emptySet() },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (visibleDocuments.isEmpty()) {
+                    item {
+                        Text(
+                            "No se encontraron libros",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                }
+                items(visibleDocuments, key = LibraryDocument::identifier) { document ->
+                    ResetBookRow(
+                        document = document,
+                        selected = document.identifier in selectedIdentifiers,
+                        selectionChanged = { selected ->
+                            selectedIdentifiers = if (selected) {
+                                selectedIdentifiers + document.identifier
+                            } else {
+                                selectedIdentifiers - document.identifier
+                            }
+                        }
+                    )
+                }
+            }
+            MichisReaderButton(
+                text = "Reiniciar seleccionados",
+                onClick = {
+                    if (selectedIdentifiers.isEmpty()) {
+                        Toast.makeText(context, "Selecciona al menos un libro", Toast.LENGTH_SHORT).show()
+                    } else showResetConfirmation = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            )
+        }
+    }
+    if (showResetConfirmation) {
+        val selectedDocuments = documents.filter { it.identifier in selectedIdentifiers }
+        AlertDialog(
+            onDismissRequest = { showResetConfirmation = false },
+            title = { Text("Reiniciar ${selectedDocuments.size} libros") },
+            text = {
+                Text(
+                    "Esta operación borrará los datos de lectura asociados y se sincronizará con Drive. " +
+                        "Los archivos EPUB no se eliminarán."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirmation = false
+                    resetDocuments(selectedDocuments)
+                }) { Text("Reiniciar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetConfirmation = false }) { Text("Cancelar") }
+            },
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun ResetBooksSortSelector(selected: ResetBooksSortMode, select: (ResetBooksSortMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(selected.label, modifier = Modifier.weight(1f))
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Mostrar opciones")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ResetBooksSortMode.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        select(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResetBookRow(
+    document: LibraryDocument,
+    selected: Boolean,
+    selectionChanged: (Boolean) -> Unit
+) {
+    MichisReaderCard(modifier = Modifier.clickable { selectionChanged(!selected) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = selected, onCheckedChange = selectionChanged)
+            Column(modifier = Modifier.padding(start = 8.dp)) {
+                Text(document.title, fontWeight = FontWeight.SemiBold)
+                Text(
+                    buildString {
+                        append(document.format)
+                        if (document.author.isNotBlank()) append(" · ${document.author}")
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+internal enum class ResetBooksSortMode(val label: String) {
+    TITLE("Título"), AUTHOR("Autor"), FORMAT("Formato"), RECENTLY_OPENED("Abiertos recientemente")
+}
+
+internal fun filterAndSortResetDocuments(
+    documents: List<LibraryDocument>,
+    query: String,
+    sortMode: ResetBooksSortMode
+): List<LibraryDocument> {
+    val normalizedQuery = query.trim()
+    val filtered = documents.filter { document ->
+        normalizedQuery.isBlank() || listOf(
+            document.title, document.author, document.format, document.fileName
+        ).any { value -> value.contains(normalizedQuery, ignoreCase = true) }
+    }
+    return when (sortMode) {
+        ResetBooksSortMode.AUTHOR -> filtered.sortedWith(
+            compareBy<LibraryDocument> { it.author.ifBlank { "￿" }.lowercase() }
+                .thenBy { it.title.lowercase() }
+        )
+        ResetBooksSortMode.FORMAT -> filtered.sortedWith(
+            compareBy<LibraryDocument> { it.format.lowercase() }.thenBy { it.title.lowercase() }
+        )
+        ResetBooksSortMode.RECENTLY_OPENED -> filtered.sortedByDescending(LibraryDocument::lastOpenedAt)
+        ResetBooksSortMode.TITLE -> filtered.sortedBy { it.title.lowercase() }
+    }
 }

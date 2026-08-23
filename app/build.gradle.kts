@@ -33,6 +33,10 @@ configure<ApplicationExtension> {
 dependencies {
     add("implementation", platform("androidx.compose:compose-bom:2025.02.00"))
     add("implementation", "androidx.compose.material3:material3")
+    add("implementation", "androidx.activity:activity-compose:1.10.1")
+    add("implementation", "androidx.compose.material:material-icons-extended")
+    add("debugImplementation", "androidx.compose.ui:ui-tooling")
+    add("implementation", "androidx.compose.ui:ui-tooling-preview")
     add("implementation", "com.github.KvColorPalette:KvColorPicker-Android:3.0.1")
     add("implementation", "androidx.activity:activity-ktx:1.10.1")
     add("implementation", "androidx.credentials:credentials:1.7.0-alpha02")
