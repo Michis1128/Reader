@@ -1,11 +1,25 @@
 package com.michis.reader.sync
 
-import com.michis.reader.databinding.DialogDriveSyncConfirmationBinding
-import com.michis.reader.theme.AppThemePalette
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
 
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.unit.dp
 
 /** Explica las acciones manuales de Drive y recuerda cada advertencia por separado. */
 class DriveSyncConfirmationController(private val activity: Activity) {
@@ -16,27 +30,35 @@ class DriveSyncConfirmationController(private val activity: Activity) {
             confirmed()
             return
         }
-        val binding = DialogDriveSyncConfirmationBinding.inflate(activity.layoutInflater)
-        binding.explanationText.text = explanation(direction)
-        AppThemePalette.markCard(binding.root)
-        val dialog = AlertDialog.Builder(activity)
+        var doNotShowAgain by mutableStateOf(false)
+        val content = ComposeView(activity).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setContent {
+                MichisReaderComposeTheme {
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text(explanation(direction))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(doNotShowAgain, { doNotShowAgain = it })
+                            Text("No volver a mostrar esta advertencia para esta acción")
+                        }
+                    }
+                }
+            }
+        }
+        AlertDialog.Builder(activity)
             .setTitle(if (direction == SyncDirection.UPLOAD) "Subir cambios a Drive" else "Descargar cambios de Drive")
-            .setView(binding.root)
+            .setView(content)
             .setNegativeButton("Cancelar", null)
             .setPositiveButton("Confirmar") { _, _ ->
-                if (binding.doNotShowAgainCheckbox.isChecked) {
-                    warningPreferences.hide(direction)
-                }
+                if (doNotShowAgain) warningPreferences.hide(direction)
                 confirmed()
-            }
-            .create()
-        dialog.setOnShowListener { AppThemePalette.apply(activity) }
-        dialog.show()
+            }.show()
     }
 
-    fun restoreWarnings() {
-        warningPreferences.restoreAll()
-    }
+    fun restoreWarnings() = warningPreferences.restoreAll()
 
     private fun explanation(direction: SyncDirection): String = when (direction) {
         SyncDirection.UPLOAD ->
@@ -47,29 +69,20 @@ class DriveSyncConfirmationController(private val activity: Activity) {
                 "No se subirán tus cambios locales y las versiones locales más recientes se conservarán."
         SyncDirection.BIDIRECTIONAL -> "Se sincronizarán cambios locales y remotos de forma segura."
     }
-
 }
 
 internal class DriveSyncWarningPreferences(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     fun shouldShow(direction: SyncDirection): Boolean = preferences.getBoolean(preferenceKey(direction), true)
-
-    fun hide(direction: SyncDirection) {
-        preferences.edit().putBoolean(preferenceKey(direction), false).apply()
-    }
-
+    fun hide(direction: SyncDirection) = preferences.edit().putBoolean(preferenceKey(direction), false).apply()
     fun restoreAll() {
-        preferences.edit()
-            .putBoolean(KEY_SHOW_UPLOAD_WARNING, true)
-            .putBoolean(KEY_SHOW_DOWNLOAD_WARNING, true)
-            .apply()
+        preferences.edit().putBoolean(KEY_SHOW_UPLOAD_WARNING, true).putBoolean(KEY_SHOW_DOWNLOAD_WARNING, true).apply()
     }
 
     private fun preferenceKey(direction: SyncDirection): String = when (direction) {
-        SyncDirection.UPLOAD -> KEY_SHOW_UPLOAD_WARNING
+        SyncDirection.UPLOAD, SyncDirection.BIDIRECTIONAL -> KEY_SHOW_UPLOAD_WARNING
         SyncDirection.DOWNLOAD -> KEY_SHOW_DOWNLOAD_WARNING
-        SyncDirection.BIDIRECTIONAL -> KEY_SHOW_UPLOAD_WARNING
     }
 
     private companion object {
