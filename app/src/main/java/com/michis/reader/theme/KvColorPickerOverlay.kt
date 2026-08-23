@@ -4,7 +4,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +12,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import com.kavi.droid.color.picker.ui.KvColorPickerBottomSheet
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
 
 /** Muestra KvColorPicker sobre una pantalla clásica basada en Views. */
 object KvColorPickerOverlay {
@@ -27,7 +27,7 @@ object KvColorPickerOverlay {
         }
         root.addView(overlay, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         overlay.setContent {
-            MaterialTheme {
+            MichisReaderComposeTheme {
                 val isVisible = remember { mutableStateOf(true) }
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
