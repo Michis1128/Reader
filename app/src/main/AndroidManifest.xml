@@ -22,6 +22,7 @@
         <activity android:name=".dictionary.DictionariesActivity" />
         <activity android:name=".annotations.QuoteColorActivity" />
         <activity android:name=".annotations.BookQuotesActivity" />
+        <activity android:name=".annotations.QuotesActivity" />
         <activity android:name=".annotations.BookmarksActivity" />
         <activity android:name=".app.MainActivity" android:exported="true">
             <intent-filter>
