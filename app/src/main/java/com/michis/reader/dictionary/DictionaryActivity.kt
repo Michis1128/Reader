@@ -1,304 +1,517 @@
 package com.michis.reader.dictionary
 
-import com.michis.reader.R
-import com.michis.reader.data.*
-import com.michis.reader.databinding.ActivityDictionaryBinding
-import com.michis.reader.databinding.ItemDictionaryCategoryBinding
-import com.michis.reader.databinding.ItemDictionaryEntryBinding
-import com.michis.reader.databinding.ItemDictionarySelectionBinding
-import com.michis.reader.databinding.ViewDictionaryCategoryCreatorBinding
-import com.michis.reader.databinding.ViewActionButtonBinding
-import com.michis.reader.databinding.ViewDictionaryEntryEditorBinding
-import com.michis.reader.databinding.ViewDictionaryMessageBinding
-import com.michis.reader.databinding.ViewDictionarySectionTitleBinding
-import com.michis.reader.databinding.ViewDictionarySelectionActionsBinding
-import com.michis.reader.settings.ReaderSettingsRepository
-import com.michis.reader.theme.*
-import com.michis.reader.ui.ScreenHeader
-import com.michis.reader.ui.SystemBarInsets
+import com.michis.reader.data.DictionaryCategory
+import com.michis.reader.data.DictionaryEntry
+import com.michis.reader.data.LibraryDocument
+import com.michis.reader.data.ReaderDatabase
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
+import com.michis.reader.ui.compose.MichisReaderButton
+import com.michis.reader.ui.compose.MichisReaderButtonRow
+import com.michis.reader.ui.compose.MichisReaderCard
+import com.michis.reader.ui.compose.MichisReaderInputShape
+import com.michis.reader.ui.compose.MichisReaderScreenHeader
 
-import android.graphics.Color
-import android.app.AlertDialog
 import android.os.Bundle
-import android.view.View
-import android.widget.*
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
 class DictionaryActivity : ComponentActivity() {
-    private lateinit var binding: ActivityDictionaryBinding
     private lateinit var database: ReaderDatabase
     private lateinit var document: LibraryDocument
-    private lateinit var titleView: TextView
-    private lateinit var content: LinearLayout
-    private var selectedCategory: DictionaryCategory? = null
     private val pendingTerm by lazy { intent.getStringExtra(EXTRA_SELECTED_TEXT).orEmpty().trim() }
     private val pendingContext by lazy { intent.getStringExtra(EXTRA_SELECTED_CONTEXT).orEmpty().trim() }
+    private var screen by mutableStateOf<DictionaryScreen>(DictionaryScreen.Categories)
+    private var deletion by mutableStateOf<DictionaryDeletion?>(null)
+    private var refreshVersion by mutableStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        database = ReaderDatabase.getInstance(this)
+        document = database.findDocument(intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1)) ?: run {
+            finish()
+            return
+        }
+        screen = requestedEntryScreen() ?: DictionaryScreen.Categories
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = navigateBack()
         })
-        database = ReaderDatabase.getInstance(this)
-        document = database.findDocument(intent.getLongExtra(EXTRA_DOCUMENT_IDENTIFIER, -1)) ?: run { finish(); return }
-        binding = ActivityDictionaryBinding.inflate(layoutInflater)
-        AppThemePalette.markBackground(binding.rootContainer)
-        ScreenHeader.configure(this, binding.screenHeader, "") { navigateBack() }
-        titleView = binding.screenHeader.titleText
-        content = binding.contentContainer
-        SystemBarInsets.apply(binding.rootContainer)
-        setContentView(binding.root)
-        AppThemePalette.apply(this)
-        val requestedEntry = database.findDictionaryEntry(intent.getLongExtra(EXTRA_ENTRY_IDENTIFIER, -1))
-            ?.takeIf { it.documentIdentifier in database.effectiveDictionaryOwnerIdentifiers(document.identifier) }
-        val requestedCategory = requestedEntry?.let { entry ->
-            database.dictionaryCategories(entry.documentIdentifier).firstOrNull { it.identifier == entry.categoryIdentifier }
-        }
-        if (requestedEntry != null && requestedCategory != null) showEntryEditor(requestedCategory, requestedEntry) else showCategories()
-    }
-
-    private fun showCategories() {
-        selectedCategory = null; content.removeAllViews(); titleView.text = "Diccionario · ${document.title}"
-        content.addView(message(
-            "Organiza palabras, personajes o conceptos en subcategorías. Primero crea una subcategoría y después agrega dentro las palabras o frases."
-        ).apply { setBackgroundResource(R.drawable.rounded_panel) })
-        if (pendingTerm.isNotBlank()) content.addView(message(
-            "Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer; después podrás escribir su descripción ahora o dejarla pendiente."
-        ).apply { setBackgroundResource(R.drawable.rounded_panel) })
-        content.addView(sectionTitle("Subcategorías"))
-        val categories = database.dictionaryCategories(document.identifier)
-        content.addView(categoryCreator())
-        content.addView(actionButton("Compartir este diccionario con otros libros") { showSharingOptions() })
-        if (categories.isNotEmpty() && pendingTerm.isBlank()) {
-            content.addView(actionButton("Seleccionar subcategorías para eliminar") {
-                showCategorySelection(categories)
-            })
-        }
-        categories.forEach { category ->
-            content.addView(categoryRow(category) {
-                if (pendingTerm.isBlank()) showEntries(category) else showEntryEditor(category, null)
-            })
-        }
-        if (categories.isEmpty()) content.addView(message("Este libro todavía no tiene subcategorías. Crea la primera, por ejemplo: Personajes, Palabras o Lugares."))
-    }
-
-    private fun categoryCreator(): View {
-        val creatorBinding = ViewDictionaryCategoryCreatorBinding.inflate(layoutInflater, content, false)
-        creatorBinding.createCategoryButton.setOnClickListener {
-            val identifier = database.createDictionaryCategory(
-                document.identifier,
-                creatorBinding.categoryNameInput.text.toString()
-            )
-            if (identifier < 0) {
-                Toast.makeText(this, "Escribe un nombre", Toast.LENGTH_SHORT).show()
-            } else {
-                val created = database.dictionaryCategories(document.identifier)
-                    .first { it.identifier == identifier }
-                if (pendingTerm.isBlank()) showEntries(created) else showEntryEditor(created, null)
-            }
-        }
-        return creatorBinding.root
-    }
-
-    private fun showEntries(category: DictionaryCategory) {
-        selectedCategory = category; content.removeAllViews(); titleView.text = category.name
-        val entries = database.dictionaryEntries(category.identifier)
-        content.addView(actionButton("Agregar palabra o frase") { showEntryEditor(category, null) })
-        content.addView(actionButton("Eliminar esta subcategoría") {
-            confirmDeletion(
-                "Eliminar subcategoría",
-                "Se eliminará ${category.name} y todos sus elementos. El diccionario puede quedar sin subcategorías."
-            ) {
-                database.deleteDictionaryCategory(category.identifier)
-                showCategories()
-            }
-        })
-        if (entries.isNotEmpty()) {
-            content.addView(actionButton("Seleccionar elementos para eliminar") {
-                showEntrySelection(category, entries)
-            })
-        }
-        entries.forEach { entry ->
-            content.addView(entryRow(entry) { showEntryEditor(category, entry) })
-        }
-        if (entries.isEmpty()) content.addView(message("Esta subcategoría aún no tiene elementos."))
-    }
-
-    private fun showCategorySelection(categories: List<DictionaryCategory>) {
-        selectedCategory = null; content.removeAllViews(); titleView.text = "Eliminar subcategorías"
-        content.addView(message("Selecciona una o varias subcategorías. También se eliminarán todas las entradas que contienen."))
-        val selected = linkedSetOf<Long>()
-        categories.forEach { category ->
-            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
-            itemBinding.selectionCheckbox.apply {
-                text = category.name
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selected += category.identifier else selected -= category.identifier
-                }
-            }
-            content.addView(itemBinding.root)
-        }
-        val actionsBinding = ViewDictionarySelectionActionsBinding.inflate(layoutInflater, content, false)
-        actionsBinding.deleteButton.apply {
-            text = "Eliminar seleccionadas"
-            setOnClickListener {
-                if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos una subcategoría", Toast.LENGTH_SHORT).show()
-                else confirmDeletion("Eliminar subcategorías", "Se eliminarán ${selected.size} subcategorías y sus elementos.") {
-                    selected.forEach(database::deleteDictionaryCategory); showCategories()
-                }
-            }
-        }
-        actionsBinding.cancelButton.setOnClickListener { showCategories() }
-        content.addView(actionsBinding.root)
-    }
-
-    private fun showEntrySelection(category: DictionaryCategory, entries: List<DictionaryEntry>) {
-        selectedCategory = category; content.removeAllViews(); titleView.text = "Eliminar de ${category.name}"
-        content.addView(message("Selecciona todas las palabras o frases que deseas eliminar."))
-        val selected = linkedSetOf<Long>()
-        entries.forEach { entry ->
-            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
-            itemBinding.selectionCheckbox.apply {
-                text = entry.term
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selected += entry.identifier else selected -= entry.identifier
-                }
-            }
-            content.addView(itemBinding.root)
-        }
-        val actionsBinding = ViewDictionarySelectionActionsBinding.inflate(layoutInflater, content, false)
-        actionsBinding.deleteButton.apply {
-            text = "Eliminar seleccionados"
-            setOnClickListener {
-                if (selected.isEmpty()) Toast.makeText(context, "Selecciona al menos un elemento", Toast.LENGTH_SHORT).show()
-                else confirmDeletion("Eliminar elementos", "Se eliminarán ${selected.size} elementos del diccionario.") {
-                    selected.forEach(database::deleteDictionaryEntry); showEntries(category)
-                }
-            }
-        }
-        actionsBinding.cancelButton.setOnClickListener { showEntries(category) }
-        content.addView(actionsBinding.root)
-    }
-
-    private fun confirmDeletion(title: String, message: String, action: () -> Unit) {
-        AlertDialog.Builder(this).setTitle(title).setMessage(message)
-            .setNegativeButton("Cancelar", null).setPositiveButton("Eliminar") { _, _ -> action() }.show()
-    }
-
-    private fun showSharingOptions() {
-        selectedCategory = null; content.removeAllViews(); titleView.text = "Compartir diccionario"
-        content.addView(message("Selecciona los libros que también podrán usar las categorías y entradas de ${document.title}."))
-        val linked = database.linkedDocuments(document.identifier)
-        database.findDocuments().filter { it.identifier != document.identifier }.forEach { target ->
-            val itemBinding = ItemDictionarySelectionBinding.inflate(layoutInflater, content, false)
-            itemBinding.selectionCheckbox.apply {
-                text = target.title
-                isChecked = target.identifier in linked
-                setOnCheckedChangeListener { _, checked -> database.setDictionaryLinked(document.identifier, target.identifier, checked) }
-            }
-            content.addView(itemBinding.root)
-        }
-        content.addView(actionButton("Listo") { showCategories() })
-    }
-
-    private fun showEntryEditor(category: DictionaryCategory, existing: DictionaryEntry?) {
-        selectedCategory = category; content.removeAllViews(); titleView.text = category.name
-        val editorBinding = ViewDictionaryEntryEditorBinding.inflate(layoutInflater, content, false).apply {
-            editorTitle.text = if (existing == null) "Nuevo elemento" else "Editar elemento"
-            termInput.setText(existing?.term ?: pendingTerm)
-            descriptionInput.setText(existing?.description.orEmpty())
-        }
-        editorBinding.saveButton.setOnClickListener {
-            if (existing == null) {
-                val result = database.saveDictionaryEntry(
-                    document.identifier,
-                    category.identifier,
-                    editorBinding.termInput.text.toString(),
-                    editorBinding.descriptionInput.text.toString(),
-                    pendingContext
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContent {
+            MichisReaderComposeTheme {
+                DictionaryScreenContent(
+                    document = document,
+                    screen = screen,
+                    pendingTerm = pendingTerm,
+                    categories = database.dictionaryCategories(document.identifier),
+                    entries = { database.dictionaryEntries(it.identifier) },
+                    documents = database.findDocuments(),
+                    linkedDocuments = database.linkedDocuments(document.identifier),
+                    refreshVersion = refreshVersion,
+                    navigateBack = ::navigateBack,
+                    navigate = { screen = it },
+                    createCategory = ::createCategory,
+                    saveEntry = ::saveEntry,
+                    updateEntry = ::updateEntry,
+                    requestDeletion = { deletion = it },
+                    toggleDictionaryLink = ::toggleDictionaryLink
                 )
-                if (result == ReaderDatabase.DUPLICATE_DICTIONARY_ENTRY) showDuplicateMessage() else pendingSaved()
-            } else {
-                database.updateDictionaryDescription(existing.identifier, editorBinding.descriptionInput.text.toString())
-                pendingSaved()
-            }
-        }
-        editorBinding.secondaryActionButton.apply {
-            text = if (existing == null) "Guardar y describir después" else "Eliminar elemento"
-            if (existing != null) setTextColor(Color.rgb(170, 35, 35))
-            setOnClickListener {
-                if (existing == null) {
-                    val result = database.saveDictionaryEntry(
-                        document.identifier,
-                        category.identifier,
-                        editorBinding.termInput.text.toString(),
-                        "",
-                        pendingContext
+                deletion?.let { request ->
+                    DictionaryDeletionDialog(
+                        request = request,
+                        dismiss = { deletion = null },
+                        confirm = ::confirmDeletion
                     )
-                    if (result == ReaderDatabase.DUPLICATE_DICTIONARY_ENTRY) showDuplicateMessage() else pendingSaved()
-                } else {
-                    database.deleteDictionaryEntry(existing.identifier)
-                    showEntries(category)
                 }
             }
         }
-        content.addView(editorBinding.root)
     }
 
-    private fun pendingSaved() {
+    private fun requestedEntryScreen(): DictionaryScreen.Editor? {
+        val entry = database.findDictionaryEntry(intent.getLongExtra(EXTRA_ENTRY_IDENTIFIER, -1))
+            ?.takeIf { it.documentIdentifier in database.effectiveDictionaryOwnerIdentifiers(document.identifier) }
+            ?: return null
+        val category = database.dictionaryCategories(entry.documentIdentifier)
+            .firstOrNull { it.identifier == entry.categoryIdentifier }
+            ?: return null
+        return DictionaryScreen.Editor(category, entry)
+    }
+
+    private fun createCategory(name: String) {
+        val identifier = database.createDictionaryCategory(document.identifier, name)
+        if (identifier < 0) {
+            Toast.makeText(this, "Escribe un nombre", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val category = database.dictionaryCategories(document.identifier).firstOrNull { it.identifier == identifier }
+            ?: return
+        screen = if (pendingTerm.isBlank()) DictionaryScreen.Entries(category) else DictionaryScreen.Editor(category, null)
+        refresh()
+    }
+
+    private fun saveEntry(category: DictionaryCategory, term: String, description: String, describeLater: Boolean) {
+        val result = database.saveDictionaryEntry(
+            document.identifier,
+            category.identifier,
+            term,
+            if (describeLater) "" else description,
+            pendingContext
+        )
+        when (result) {
+            ReaderDatabase.DUPLICATE_DICTIONARY_ENTRY -> Toast.makeText(
+                this,
+                "Esta palabra o frase ya existe en el diccionario de este libro",
+                Toast.LENGTH_LONG
+            ).show()
+            -1L -> Toast.makeText(this, "Escribe una palabra o frase", Toast.LENGTH_SHORT).show()
+            else -> entrySaved(category)
+        }
+    }
+
+    private fun updateEntry(category: DictionaryCategory, entry: DictionaryEntry, description: String) {
+        database.updateDictionaryDescription(entry.identifier, description)
+        entrySaved(category)
+    }
+
+    private fun entrySaved(category: DictionaryCategory) {
         Toast.makeText(this, "Elemento guardado", Toast.LENGTH_SHORT).show()
-        if (pendingTerm.isNotBlank()) finish() else selectedCategory?.let(::showEntries)
+        if (pendingTerm.isNotBlank()) finish() else {
+            screen = DictionaryScreen.Entries(category)
+            refresh()
+        }
     }
 
-    private fun showDuplicateMessage() = Toast.makeText(
-        this, "Esta palabra o frase ya existe en el diccionario de este libro", Toast.LENGTH_LONG
-    ).show()
+    private fun toggleDictionaryLink(documentIdentifier: Long, linked: Boolean) {
+        database.setDictionaryLinked(document.identifier, documentIdentifier, linked)
+        refresh()
+    }
+
+    private fun confirmDeletion(request: DictionaryDeletion) {
+        when (request) {
+            is DictionaryDeletion.Category -> {
+                database.deleteDictionaryCategory(request.category.identifier)
+                screen = DictionaryScreen.Categories
+            }
+            is DictionaryDeletion.Categories -> {
+                request.identifiers.forEach(database::deleteDictionaryCategory)
+                screen = DictionaryScreen.Categories
+            }
+            is DictionaryDeletion.Entry -> {
+                database.deleteDictionaryEntry(request.entry.identifier)
+                screen = DictionaryScreen.Entries(request.category)
+            }
+            is DictionaryDeletion.Entries -> {
+                request.identifiers.forEach(database::deleteDictionaryEntry)
+                screen = DictionaryScreen.Entries(request.category)
+            }
+        }
+        deletion = null
+        refresh()
+    }
 
     private fun navigateBack() {
-        if (selectedCategory != null) showCategories() else finish()
+        screen = when (val current = screen) {
+            DictionaryScreen.Categories -> {
+                finish()
+                return
+            }
+            is DictionaryScreen.Entries -> DictionaryScreen.Categories
+            is DictionaryScreen.Editor -> if (pendingTerm.isNotBlank()) DictionaryScreen.Categories else DictionaryScreen.Entries(current.category)
+            is DictionaryScreen.SelectCategories -> DictionaryScreen.Categories
+            is DictionaryScreen.SelectEntries -> DictionaryScreen.Entries(current.category)
+            DictionaryScreen.Sharing -> DictionaryScreen.Categories
+        }
     }
 
-    private fun categoryRow(category: DictionaryCategory, action: () -> Unit): View {
-        val binding = ItemDictionaryCategoryBinding.inflate(layoutInflater, content, false)
-        binding.categoryName.text = category.name
-        binding.root.setOnClickListener { action() }
-        styleDictionaryCard(binding.root, binding.categoryName, binding.categoryHint)
-        return binding.root
+    private fun refresh() {
+        refreshVersion += 1
     }
 
-    private fun entryRow(entry: DictionaryEntry, action: () -> Unit): View {
-        val binding = ItemDictionaryEntryBinding.inflate(layoutInflater, content, false)
-        binding.entryTerm.text = entry.term
-        binding.entryDescription.text = entry.description.ifBlank { "Sin descripción" }
-        binding.root.setOnClickListener { action() }
-        styleDictionaryCard(binding.root, binding.entryTerm, binding.entryDescription)
-        return binding.root
-    }
-
-    private fun styleDictionaryCard(card: View, title: TextView, subtitle: TextView) {
-        val palette = AppThemePalette.current(this)
-        card.background = AppThemePalette.cardBackground(this)
-        AppThemePalette.markCard(card)
-        title.setTextColor(palette.primaryText)
-        subtitle.setTextColor(palette.secondaryText)
-    }
-    private fun actionButton(value: String, action: () -> Unit): View {
-        val binding = ViewActionButtonBinding.inflate(layoutInflater, content, false)
-        binding.actionButton.text = value
-        binding.actionButton.setOnClickListener { action() }
-        return binding.root
-    }
-
-    private fun sectionTitle(value: String) =
-        ViewDictionarySectionTitleBinding.inflate(layoutInflater, content, false).root.apply { text = value }
-
-    private fun message(value: String) =
-        ViewDictionaryMessageBinding.inflate(layoutInflater, content, false).root.apply { text = value }
     companion object {
         const val EXTRA_DOCUMENT_IDENTIFIER = "document_identifier"
         const val EXTRA_SELECTED_TEXT = "selected_text"
         const val EXTRA_SELECTED_CONTEXT = "selected_context"
         const val EXTRA_ENTRY_IDENTIFIER = "dictionary_entry_identifier"
     }
+}
+
+private sealed interface DictionaryScreen {
+    data object Categories : DictionaryScreen
+    data class Entries(val category: DictionaryCategory) : DictionaryScreen
+    data class Editor(val category: DictionaryCategory, val entry: DictionaryEntry?) : DictionaryScreen
+    data class SelectCategories(val categories: List<DictionaryCategory>) : DictionaryScreen
+    data class SelectEntries(val category: DictionaryCategory, val entries: List<DictionaryEntry>) : DictionaryScreen
+    data object Sharing : DictionaryScreen
+}
+
+private sealed interface DictionaryDeletion {
+    val title: String
+    val message: String
+
+    data class Category(val category: DictionaryCategory) : DictionaryDeletion {
+        override val title = "Eliminar subcategoría"
+        override val message = "Se eliminará ${category.name} y todos sus elementos. El diccionario puede quedar sin subcategorías."
+    }
+    data class Categories(val identifiers: Set<Long>) : DictionaryDeletion {
+        override val title = "Eliminar subcategorías"
+        override val message = "Se eliminarán ${identifiers.size} subcategorías y todos sus elementos."
+    }
+    data class Entry(val category: DictionaryCategory, val entry: DictionaryEntry) : DictionaryDeletion {
+        override val title = "Eliminar elemento"
+        override val message = "Se eliminará ${entry.term} del diccionario."
+    }
+    data class Entries(val category: DictionaryCategory, val identifiers: Set<Long>) : DictionaryDeletion {
+        override val title = "Eliminar elementos"
+        override val message = "Se eliminarán ${identifiers.size} elementos del diccionario."
+    }
+}
+
+@Composable
+private fun DictionaryScreenContent(
+    document: LibraryDocument,
+    screen: DictionaryScreen,
+    pendingTerm: String,
+    categories: List<DictionaryCategory>,
+    entries: (DictionaryCategory) -> List<DictionaryEntry>,
+    documents: List<LibraryDocument>,
+    linkedDocuments: Set<Long>,
+    refreshVersion: Int,
+    navigateBack: () -> Unit,
+    navigate: (DictionaryScreen) -> Unit,
+    createCategory: (String) -> Unit,
+    saveEntry: (DictionaryCategory, String, String, Boolean) -> Unit,
+    updateEntry: (DictionaryCategory, DictionaryEntry, String) -> Unit,
+    requestDeletion: (DictionaryDeletion) -> Unit,
+    toggleDictionaryLink: (Long, Boolean) -> Unit
+) {
+    val title = when (screen) {
+        DictionaryScreen.Categories -> "Diccionario · ${document.title}"
+        is DictionaryScreen.Entries -> screen.category.name
+        is DictionaryScreen.Editor -> screen.category.name
+        is DictionaryScreen.SelectCategories -> "Eliminar subcategorías"
+        is DictionaryScreen.SelectEntries -> "Eliminar de ${screen.category.name}"
+        DictionaryScreen.Sharing -> "Compartir diccionario"
+    }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = { MichisReaderScreenHeader(title, navigateBack) }
+    ) { contentPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
+        ) {
+            when (screen) {
+                DictionaryScreen.Categories -> CategoriesContent(
+                    categories, pendingTerm, createCategory, navigate
+                )
+                is DictionaryScreen.Entries -> EntriesContent(screen.category, entries(screen.category), navigate, requestDeletion)
+                is DictionaryScreen.Editor -> EntryEditorContent(screen.category, screen.entry, pendingTerm, refreshVersion, saveEntry, updateEntry, requestDeletion)
+                is DictionaryScreen.SelectCategories -> CategorySelectionContent(screen.categories, navigate, requestDeletion)
+                is DictionaryScreen.SelectEntries -> EntrySelectionContent(screen.category, screen.entries, navigate, requestDeletion)
+                DictionaryScreen.Sharing -> SharingContent(document, documents, linkedDocuments, toggleDictionaryLink, navigate)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoriesContent(
+    categories: List<DictionaryCategory>,
+    pendingTerm: String,
+    createCategory: (String) -> Unit,
+    navigate: (DictionaryScreen) -> Unit
+) {
+    var categoryName by rememberSaveable { mutableStateOf("") }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        item {
+            MichisReaderCard {
+                Text("Organiza palabras, personajes o conceptos en subcategorías. Primero crea una subcategoría y después agrega dentro las palabras o frases.")
+            }
+        }
+        if (pendingTerm.isNotBlank()) item {
+            MichisReaderCard { Text("Vas a guardar “$pendingTerm”. Toca la subcategoría donde debe aparecer.") }
+        }
+        item { Text("Subcategorías", style = MaterialTheme.typography.titleLarge) }
+        item {
+            MichisReaderCard {
+                OutlinedTextField(
+                    value = categoryName,
+                    onValueChange = { categoryName = it },
+                    label = { Text("Nombre de la nueva subcategoría") },
+                    singleLine = true,
+                    shape = MichisReaderInputShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                MichisReaderButton("Crear subcategoría", { createCategory(categoryName) }, Modifier.fillMaxWidth())
+            }
+        }
+        item { MichisReaderButton("Compartir este diccionario con otros libros", { navigate(DictionaryScreen.Sharing) }, Modifier.fillMaxWidth()) }
+        if (categories.isNotEmpty() && pendingTerm.isBlank()) item {
+            MichisReaderButton("Seleccionar subcategorías para eliminar", { navigate(DictionaryScreen.SelectCategories(categories)) }, Modifier.fillMaxWidth())
+        }
+        items(categories, key = DictionaryCategory::identifier) { category ->
+            MichisReaderCard(modifier = Modifier.clickable {
+                navigate(if (pendingTerm.isBlank()) DictionaryScreen.Entries(category) else DictionaryScreen.Editor(category, null))
+            }) {
+                Text(category.name, style = MaterialTheme.typography.titleMedium)
+                Text("Toca para ver sus elementos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (categories.isEmpty()) item { Text("Este libro todavía no tiene subcategorías. Crea la primera, por ejemplo: Personajes, Palabras o Lugares.") }
+    }
+}
+
+@Composable
+private fun EntriesContent(
+    category: DictionaryCategory,
+    entries: List<DictionaryEntry>,
+    navigate: (DictionaryScreen) -> Unit,
+    requestDeletion: (DictionaryDeletion) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        item { MichisReaderButton("Agregar palabra o frase", { navigate(DictionaryScreen.Editor(category, null)) }, Modifier.fillMaxWidth()) }
+        item { MichisReaderButton("Eliminar esta subcategoría", { requestDeletion(DictionaryDeletion.Category(category)) }, Modifier.fillMaxWidth()) }
+        if (entries.isNotEmpty()) item {
+            MichisReaderButton("Seleccionar elementos para eliminar", { navigate(DictionaryScreen.SelectEntries(category, entries)) }, Modifier.fillMaxWidth())
+        }
+        items(entries, key = DictionaryEntry::identifier) { entry ->
+            MichisReaderCard(modifier = Modifier.clickable { navigate(DictionaryScreen.Editor(category, entry)) }) {
+                Text(entry.term, style = MaterialTheme.typography.titleMedium)
+                Text(entry.description.ifBlank { "Sin descripción" }, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (entries.isEmpty()) item { Text("Esta subcategoría aún no tiene elementos.") }
+    }
+}
+
+@Composable
+private fun EntryEditorContent(
+    category: DictionaryCategory,
+    existing: DictionaryEntry?,
+    pendingTerm: String,
+    refreshVersion: Int,
+    saveEntry: (DictionaryCategory, String, String, Boolean) -> Unit,
+    updateEntry: (DictionaryCategory, DictionaryEntry, String) -> Unit,
+    requestDeletion: (DictionaryDeletion) -> Unit
+) {
+    var term by rememberSaveable(existing?.identifier, refreshVersion) { mutableStateOf(existing?.term ?: pendingTerm) }
+    var description by rememberSaveable(existing?.identifier, refreshVersion) { mutableStateOf(existing?.description.orEmpty()) }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        item { Text(if (existing == null) "Nuevo elemento" else "Editar elemento", style = MaterialTheme.typography.titleLarge) }
+        item {
+            MichisReaderCard {
+                OutlinedTextField(
+                    value = term,
+                    onValueChange = { term = it },
+                    enabled = existing == null,
+                    label = { Text("Palabra o frase") },
+                    shape = MichisReaderInputShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Descripción") },
+                    minLines = 3,
+                    shape = MichisReaderInputShape,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                MichisReaderButton(
+                    if (existing == null) "Guardar elemento" else "Guardar cambios",
+                    { if (existing == null) saveEntry(category, term, description, false) else updateEntry(category, existing, description) },
+                    Modifier.fillMaxWidth()
+                )
+                if (existing == null) {
+                    MichisReaderButton("Guardar y describir después", { saveEntry(category, term, description, true) }, Modifier.fillMaxWidth())
+                } else {
+                    MichisReaderButton("Eliminar elemento", { requestDeletion(DictionaryDeletion.Entry(category, existing)) }, Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategorySelectionContent(
+    categories: List<DictionaryCategory>,
+    navigate: (DictionaryScreen) -> Unit,
+    requestDeletion: (DictionaryDeletion) -> Unit
+) {
+    var selected by remember { mutableStateOf(emptySet<Long>()) }
+    SelectionContent(
+        message = "Selecciona una o varias subcategorías. También se eliminarán todas las entradas que contienen.",
+        items = categories.map { it.identifier to it.name },
+        selected = selected,
+        toggle = { selected = selected.toggle(it) },
+        deleteLabel = "Eliminar seleccionadas",
+        delete = { if (selected.isNotEmpty()) requestDeletion(DictionaryDeletion.Categories(selected)) },
+        cancel = { navigate(DictionaryScreen.Categories) }
+    )
+}
+
+@Composable
+private fun EntrySelectionContent(
+    category: DictionaryCategory,
+    entries: List<DictionaryEntry>,
+    navigate: (DictionaryScreen) -> Unit,
+    requestDeletion: (DictionaryDeletion) -> Unit
+) {
+    var selected by remember(category.identifier) { mutableStateOf(emptySet<Long>()) }
+    SelectionContent(
+        message = "Selecciona todas las palabras o frases que deseas eliminar.",
+        items = entries.map { it.identifier to it.term },
+        selected = selected,
+        toggle = { selected = selected.toggle(it) },
+        deleteLabel = "Eliminar seleccionados",
+        delete = { if (selected.isNotEmpty()) requestDeletion(DictionaryDeletion.Entries(category, selected)) },
+        cancel = { navigate(DictionaryScreen.Entries(category)) }
+    )
+}
+
+@Composable
+private fun SelectionContent(
+    message: String,
+    items: List<Pair<Long, String>>,
+    selected: Set<Long>,
+    toggle: (Long) -> Unit,
+    deleteLabel: String,
+    delete: () -> Unit,
+    cancel: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        Text(message)
+        MichisReaderButtonRow {
+            MichisReaderButton(deleteLabel, delete, Modifier.weight(1f), selected.isNotEmpty())
+            MichisReaderButton("Cancelar", cancel, Modifier.weight(1f))
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(items, key = { it.first }) { item ->
+                MichisReaderCard(modifier = Modifier.clickable { toggle(item.first) }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(item.first in selected, { toggle(item.first) })
+                        Text(item.second, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SharingContent(
+    owner: LibraryDocument,
+    documents: List<LibraryDocument>,
+    linkedDocuments: Set<Long>,
+    toggleDictionaryLink: (Long, Boolean) -> Unit,
+    navigate: (DictionaryScreen) -> Unit
+) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        item { Text("Selecciona los libros que también podrán usar las categorías y entradas de ${owner.title}.") }
+        items(documents.filter { it.identifier != owner.identifier }, key = LibraryDocument::identifier) { target ->
+            MichisReaderCard(modifier = Modifier.clickable {
+                toggleDictionaryLink(target.identifier, target.identifier !in linkedDocuments)
+            }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = target.identifier in linkedDocuments,
+                        onCheckedChange = { toggleDictionaryLink(target.identifier, it) }
+                    )
+                    Text(target.title, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+        item { MichisReaderButton("Listo", { navigate(DictionaryScreen.Categories) }, Modifier.fillMaxWidth()) }
+    }
+}
+
+@Composable
+private fun DictionaryDeletionDialog(
+    request: DictionaryDeletion,
+    dismiss: () -> Unit,
+    confirm: (DictionaryDeletion) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(request.title) },
+        text = { Text(request.message) },
+        confirmButton = { TextButton(onClick = { confirm(request) }) { Text("Eliminar") } },
+        dismissButton = { TextButton(onClick = dismiss) { Text("Cancelar") } }
+    )
+}
+
+private fun Set<Long>.toggle(identifier: Long): Set<Long> = toMutableSet().apply {
+    if (!add(identifier)) remove(identifier)
 }
