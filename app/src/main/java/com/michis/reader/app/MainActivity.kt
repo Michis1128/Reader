@@ -20,6 +20,10 @@ import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ViewCompositionStrategy
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -27,19 +31,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var database: ReaderDatabase
     private lateinit var documentList: LinearLayout
     private lateinit var emptyMessage: TextView
-    private lateinit var searchInput: EditText
     private lateinit var libraryBrowserState: LibraryBrowserState
     private lateinit var libraryViewRenderer: LibraryViewRenderer
     private lateinit var importCoordinator: LibraryImportCoordinator
     private lateinit var documentActions: LibraryDocumentActions
     private lateinit var librarySections: LibrarySectionsController
     private lateinit var syncController: LibrarySyncController
-    private lateinit var libraryDisplayButton: Button
-    private lateinit var libraryFilterButton: Button
-    private lateinit var syncStatusText: TextView
-    private lateinit var uploadSyncButton: Button
-    private lateinit var downloadSyncButton: Button
     private lateinit var libraryPathText: TextView
+    private var controlsState by mutableStateOf(MainControlsState())
     private var mainSection = MainSection.LIBRARY
     private val documentPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data ?: return@registerForActivityResult
@@ -82,14 +81,16 @@ class MainActivity : ComponentActivity() {
             contentResolver, database, { refreshLibrary() }, ::openReader
         ) { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
         documentActions = LibraryDocumentActions(this, database, {
-            refreshCurrentSection(searchInput.text?.toString().orEmpty())
+            refreshCurrentSection(controlsState.query)
         }) {
-            syncStatusText.text = it
+            controlsState = controlsState.copy(syncStatus = it)
         }
         librarySections = LibrarySectionsController(this, database, documentList, libraryPathText)
         syncController = LibrarySyncController(
-            this, syncStatusText, uploadSyncButton, downloadSyncButton, ::showGeneralSettings
-        ) { refreshCurrentSection(searchInput.text?.toString().orEmpty()) }
+            this,
+            { status, enabled -> controlsState = controlsState.copy(syncStatus = status, syncActionsEnabled = enabled) },
+            ::showGeneralSettings
+        ) { refreshCurrentSection(controlsState.query) }
         SystemBarInsets.apply(mainScreen)
         setContentView(mainScreen)
         AppThemePalette.apply(this)
@@ -110,32 +111,35 @@ class MainActivity : ComponentActivity() {
         AppThemePalette.markBackground(binding.rootContainer)
         documentList = binding.documentList
         emptyMessage = binding.emptyMessage
-        searchInput = binding.searchInput
-        libraryDisplayButton = binding.libraryDisplayButton.apply { text = displayModeIcon() }
-        libraryFilterButton = binding.libraryFilterButton.apply {
-            text = "Filtro: ${libraryBrowserState.sortMode.label}"
-        }
-        syncStatusText = binding.syncStatusText
-        uploadSyncButton = binding.uploadSyncButton
-        downloadSyncButton = binding.downloadSyncButton
         libraryPathText = binding.libraryPathText
-        uploadSyncButton.setOnClickListener { syncController.synchronize(SyncDirection.UPLOAD) }
-        downloadSyncButton.setOnClickListener { syncController.synchronize(SyncDirection.DOWNLOAD) }
-        binding.settingsButton.setOnClickListener { showGeneralSettings() }
-        binding.importButton.setOnClickListener { showImportMenu() }
-        searchInput.addTextChangedListener(SimpleTextWatcher(::refreshCurrentSection))
-        binding.libraryTabButton.setOnClickListener { openLibraryRoot() }
-        binding.currentlyReadingTabButton.setOnClickListener { showCurrentlyReading() }
-        binding.quotesTabButton.setOnClickListener { showQuotes() }
-        binding.bookmarksTabButton.setOnClickListener {
-            startActivity(Intent(this, BookmarksActivity::class.java))
+        controlsState = controlsState.copy(
+            filterLabel = libraryBrowserState.sortMode.label,
+            displayIcon = displayModeIcon()
+        )
+        binding.composeControls.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        binding.composeControls.setContent {
+            MainLibraryControls(
+                state = controlsState,
+                updateQuery = ::updateSearchQuery,
+                openSettings = ::showGeneralSettings,
+                upload = { syncController.synchronize(SyncDirection.UPLOAD) },
+                download = { syncController.synchronize(SyncDirection.DOWNLOAD) },
+                importBooks = ::showImportMenu,
+                openLibrary = ::openLibraryRoot,
+                openCurrentlyReading = ::showCurrentlyReading,
+                openQuotes = ::showQuotes,
+                openBookmarks = { startActivity(Intent(this, BookmarksActivity::class.java)) },
+                openDictionaries = { startActivity(Intent(this, DictionariesActivity::class.java)) },
+                openFilters = ::showLibraryFilters,
+                changeDisplay = ::cycleLibraryDisplayMode
+            )
         }
-        binding.dictionariesTabButton.setOnClickListener {
-            startActivity(Intent(this, DictionariesActivity::class.java))
-        }
-        libraryDisplayButton.setOnClickListener { cycleLibraryDisplayMode() }
-        libraryFilterButton.setOnClickListener { showLibraryFilters() }
         libraryPathText.setOnClickListener { navigateToParentFolder() }
+    }
+
+    private fun updateSearchQuery(query: String) {
+        controlsState = controlsState.copy(query = query)
+        refreshCurrentSection(query)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -148,7 +152,7 @@ class MainActivity : ComponentActivity() {
         AppThemePalette.apply(this)
         if (::syncController.isInitialized) syncController.refreshStatus()
         if (::librarySections.isInitialized && mainSection == MainSection.CURRENTLY_READING) {
-            refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
+            refreshCurrentlyReading(controlsState.query)
         }
     }
 
@@ -171,7 +175,7 @@ class MainActivity : ComponentActivity() {
         folderPickerLauncher.launch(null)
     }
 
-    private fun refreshLibrary(query: String = searchInput.text?.toString().orEmpty()) {
+    private fun refreshLibrary(query: String = controlsState.query) {
         documentList.removeAllViews()
         libraryPathText.visibility = View.VISIBLE
         val currentFolderIdentifier = libraryBrowserState.currentFolderIdentifier
@@ -207,7 +211,8 @@ class MainActivity : ComponentActivity() {
     private fun openLibraryFolder(folder: LibraryFolder) {
         libraryBrowserState.openFolder(folder)
         libraryPathText.text = libraryBrowserState.pathLabel
-        searchInput.setText(""); refreshLibrary("")
+        controlsState = controlsState.copy(query = "")
+        refreshLibrary("")
     }
 
     private fun navigateToParentFolder() {
@@ -218,8 +223,8 @@ class MainActivity : ComponentActivity() {
 
     private fun cycleLibraryDisplayMode() {
         libraryBrowserState.cycleDisplayMode()
-        libraryDisplayButton.text = displayModeIcon()
-        refreshCurrentSection(searchInput.text?.toString().orEmpty())
+        controlsState = controlsState.copy(displayIcon = displayModeIcon())
+        refreshCurrentSection(controlsState.query)
     }
 
     private fun displayModeIcon() = libraryBrowserState.displayModeIcon()
@@ -230,7 +235,7 @@ class MainActivity : ComponentActivity() {
             .setTitle("Ordenar biblioteca")
             .setSingleChoiceItems(modes.map { it.label }.toTypedArray(), libraryBrowserState.sortMode.ordinal) { dialog, index ->
                 libraryBrowserState.selectSortMode(modes[index])
-                libraryFilterButton.text = "Filtro: ${modes[index].label}"
+                controlsState = controlsState.copy(filterLabel = modes[index].label)
                 dialog.dismiss()
                 refreshLibrary()
                 if (modes[index] == LibrarySortMode.CUSTOM) {
@@ -251,7 +256,7 @@ class MainActivity : ComponentActivity() {
 
     private fun showCurrentlyReading() {
         mainSection = MainSection.CURRENTLY_READING
-        refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
+        refreshCurrentlyReading(controlsState.query)
     }
 
     private fun refreshCurrentlyReading(query: String) {
@@ -292,10 +297,4 @@ class MainActivity : ComponentActivity() {
         database.markDocumentOpened(identifier)
         startActivity(Intent(this, ReadiumEpubActivity::class.java).putExtra("document_identifier", identifier))
     }
-}
-
-private class SimpleTextWatcher(private val changed: (String) -> Unit) : android.text.TextWatcher {
-    override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) = Unit
-    override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) = changed(value?.toString().orEmpty())
-    override fun afterTextChanged(value: android.text.Editable?) = Unit
 }
