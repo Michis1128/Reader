@@ -5,7 +5,6 @@ package com.michis.reader.library
 import com.michis.reader.data.LibraryDocument
 import com.michis.reader.data.LibraryFolder
 import com.michis.reader.reader.EpubPageEstimator
-import com.michis.reader.theme.compose.MichisReaderComposeTheme
 import com.michis.reader.ui.compose.MichisReaderCard
 
 import android.graphics.Color
@@ -68,10 +67,10 @@ internal fun LibraryContent(
     openDocumentActions: (LibraryDocument) -> Unit,
     moveItem: (String, Int) -> Unit,
     quoteCount: (Long) -> Int,
-    hasDictionary: (Long) -> Boolean
+    hasDictionary: (Long) -> Boolean,
+    modifier: Modifier = Modifier
 ) {
-    MichisReaderComposeTheme {
-        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Column(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             if (state.showPath) {
                 Text(
                     state.pathLabel,
@@ -89,7 +88,6 @@ internal fun LibraryContent(
             } else {
                 LibraryList(state, navigateToParent, openFolder, openDocument, openDocumentActions, moveItem, quoteCount, hasDictionary)
             }
-        }
     }
 }
 

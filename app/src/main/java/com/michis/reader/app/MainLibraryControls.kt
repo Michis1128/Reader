@@ -1,6 +1,5 @@
 package com.michis.reader.app
 
-import com.michis.reader.theme.compose.MichisReaderComposeTheme
 import com.michis.reader.ui.compose.MichisReaderButton
 import com.michis.reader.ui.compose.MichisReaderButtonRow
 import com.michis.reader.ui.compose.MichisReaderInputShape
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -48,13 +48,14 @@ internal fun MainLibraryControls(
     openBookmarks: () -> Unit,
     openDictionaries: () -> Unit,
     openFilters: () -> Unit,
-    changeDisplay: () -> Unit
+    changeDisplay: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    MichisReaderComposeTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
+        Surface(color = MaterialTheme.colorScheme.background, modifier = modifier) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -106,6 +107,5 @@ internal fun MainLibraryControls(
                     MichisReaderButton(state.displayIcon, changeDisplay)
                 }
             }
-        }
     }
 }

@@ -5,7 +5,6 @@ import com.michis.reader.annotations.QuotesActivity
 import com.michis.reader.data.LibraryDocument
 import com.michis.reader.data.LibraryFolder
 import com.michis.reader.data.ReaderDatabase
-import com.michis.reader.databinding.ActivityMainBinding
 import com.michis.reader.dictionary.DictionariesActivity
 import com.michis.reader.library.LibraryBrowserState
 import com.michis.reader.library.LibraryContent
@@ -18,8 +17,7 @@ import com.michis.reader.reader.ReadiumEpubActivity
 import com.michis.reader.settings.SettingsActivity
 import com.michis.reader.sync.LibrarySyncController
 import com.michis.reader.sync.SyncDirection
-import com.michis.reader.theme.AppThemePalette
-import com.michis.reader.ui.SystemBarInsets
+import com.michis.reader.theme.compose.MichisReaderComposeTheme
 
 import android.app.AlertDialog
 import android.content.Intent
@@ -27,14 +25,18 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
-    private lateinit var binding: ActivityMainBinding
     private enum class MainSection { LIBRARY, CURRENTLY_READING }
 
     private lateinit var database: ReaderDatabase
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private var mainSection = MainSection.LIBRARY
     private var controlsState by mutableStateOf(MainControlsState())
     private var libraryContentState by mutableStateOf(LibraryContentState())
+    private var themeRevision by mutableStateOf(0)
 
     private val documentPickerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data ?: return@registerForActivityResult
@@ -76,7 +79,7 @@ class MainActivity : ComponentActivity() {
         })
         database = ReaderDatabase.getInstance(this)
         libraryBrowserState = LibraryBrowserState(this, database)
-        binding = ActivityMainBinding.inflate(layoutInflater)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         configureComposeContent()
         importCoordinator = LibraryImportCoordinator(
             contentResolver,
@@ -92,55 +95,54 @@ class MainActivity : ComponentActivity() {
             { status, enabled -> controlsState = controlsState.copy(syncStatus = status, syncActionsEnabled = enabled) },
             ::showGeneralSettings
         ) { refreshCurrentSection(controlsState.query) }
-        SystemBarInsets.apply(binding.root)
-        setContentView(binding.root)
-        AppThemePalette.apply(this)
         restoreLastDocumentFolder()
         importCoordinator.importIncoming(intent)
         refreshLibrary()
         if (savedInstanceState == null && intent.action == Intent.ACTION_MAIN && intent.data == null && ReaderResumeState.shouldResumeReader(this)) {
             val identifier = ReaderResumeState.lastDocumentIdentifier(this)
-            if (database.findDocument(identifier) != null) binding.root.post { openReader(identifier) }
+            if (database.findDocument(identifier) != null) window.decorView.post { openReader(identifier) }
             else ReaderResumeState.markReaderExited(this)
         }
     }
 
     private fun configureComposeContent() {
-        AppThemePalette.markBackground(binding.rootContainer)
         controlsState = controlsState.copy(
             filterLabel = libraryBrowserState.sortMode.label,
             displayIcon = libraryBrowserState.displayModeIcon()
         )
-        binding.composeControls.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        binding.composeControls.setContent {
-            MainLibraryControls(
-                state = controlsState,
-                updateQuery = ::updateSearchQuery,
-                openSettings = ::showGeneralSettings,
-                upload = { syncController.synchronize(SyncDirection.UPLOAD) },
-                download = { syncController.synchronize(SyncDirection.DOWNLOAD) },
-                importBooks = ::showImportMenu,
-                openLibrary = ::openLibraryRoot,
-                openCurrentlyReading = ::showCurrentlyReading,
-                openQuotes = { startActivity(Intent(this, QuotesActivity::class.java)) },
-                openBookmarks = { startActivity(Intent(this, BookmarksActivity::class.java)) },
-                openDictionaries = { startActivity(Intent(this, DictionariesActivity::class.java)) },
-                openFilters = ::showLibraryFilters,
-                changeDisplay = ::cycleLibraryDisplayMode
-            )
-        }
-        binding.composeLibraryContent.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-        binding.composeLibraryContent.setContent {
-            LibraryContent(
-                state = libraryContentState,
-                navigateToParent = ::navigateToParentFolder,
-                openFolder = ::openLibraryFolder,
-                openDocument = ::openReader,
-                openDocumentActions = ::showDocumentActions,
-                moveItem = ::moveLibraryItemByOffset,
-                quoteCount = { database.annotationCount(it, "cita") },
-                hasDictionary = database::hasEffectiveDictionaryEntries
-            )
+        setContent {
+            key(themeRevision) {
+                MichisReaderComposeTheme {
+                    Column(Modifier.fillMaxSize()) {
+                        MainLibraryControls(
+                            state = controlsState,
+                            updateQuery = ::updateSearchQuery,
+                            openSettings = ::showGeneralSettings,
+                            upload = { syncController.synchronize(SyncDirection.UPLOAD) },
+                            download = { syncController.synchronize(SyncDirection.DOWNLOAD) },
+                            importBooks = ::showImportMenu,
+                            openLibrary = ::openLibraryRoot,
+                            openCurrentlyReading = ::showCurrentlyReading,
+                            openQuotes = { startActivity(Intent(this@MainActivity, QuotesActivity::class.java)) },
+                            openBookmarks = { startActivity(Intent(this@MainActivity, BookmarksActivity::class.java)) },
+                            openDictionaries = { startActivity(Intent(this@MainActivity, DictionariesActivity::class.java)) },
+                            openFilters = ::showLibraryFilters,
+                            changeDisplay = ::cycleLibraryDisplayMode
+                        )
+                        LibraryContent(
+                            state = libraryContentState,
+                            navigateToParent = ::navigateToParentFolder,
+                            openFolder = ::openLibraryFolder,
+                            openDocument = ::openReader,
+                            openDocumentActions = ::showDocumentActions,
+                            moveItem = ::moveLibraryItemByOffset,
+                            quoteCount = { database.annotationCount(it, "cita") },
+                            hasDictionary = database::hasEffectiveDictionaryEntries,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -151,7 +153,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        AppThemePalette.apply(this)
+        themeRevision += 1
         if (::syncController.isInitialized) syncController.refreshStatus()
         if (mainSection == MainSection.CURRENTLY_READING) refreshCurrentlyReading(controlsState.query)
     }
