@@ -8,7 +8,6 @@ import com.michis.reader.data.*
 import com.michis.reader.databinding.ActivityReadiumEpubBinding
 import com.michis.reader.databinding.ViewEpubBottomControlsBinding
 import com.michis.reader.databinding.ViewEpubTopControlsBinding
-import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.settings.*
 import com.michis.reader.spen.*
@@ -62,7 +61,6 @@ class ReadiumEpubActivity : FragmentActivity() {
     private lateinit var settingsPanel: View
     private lateinit var contentsPanel: View
     private lateinit var searchPanel: View
-    private lateinit var searchPanelBinding: ViewEpubSearchPanelBinding
     private lateinit var searchController: EpubSearchController
     private lateinit var panelCoordinator: ReaderPanelCoordinator
     private lateinit var contentsController: EpubContentsPanel
@@ -288,27 +286,18 @@ class ReadiumEpubActivity : FragmentActivity() {
     ).create()
 
     private fun buildSearchPanel(): View {
-        searchPanelBinding = ViewEpubSearchPanelBinding.inflate(layoutInflater)
         searchController = EpubSearchController(
-            binding = searchPanelBinding,
+            activity = this,
             scope = lifecycleScope,
             decorations = decorationController,
             navigationHistory = navigationHistory,
             currentPageIndex = ::currentPageIndex,
             animationsEnabled = ::pageAnimationsEnabled,
             navigate = { locator, animated -> navigator.go(locator, animated = animated) },
-            scheduleDelayed = { action, delay -> rootLayout.postDelayed(action, delay) }
+            scheduleDelayed = { action, delay -> rootLayout.postDelayed(action, delay) },
+            closePanel = ::closeSearchPanel
         )
-        searchPanelBinding.searchPanel.tag = MENU_CARD_TAG
-        searchPanelBinding.searchButton.setOnClickListener { searchController.performSearch() }
-        searchPanelBinding.searchInput.setOnEditorActionListener { _, _, _ ->
-            searchController.performSearch()
-            true
-        }
-        searchPanelBinding.previousResultButton.setOnClickListener { searchController.move(-1) }
-        searchPanelBinding.nextResultButton.setOnClickListener { searchController.move(1) }
-        searchPanelBinding.closeSearchButton.setOnClickListener { closeSearchPanel() }
-        return searchPanelBinding.root
+        return searchController.create()
     }
 
 
@@ -501,7 +490,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun toggleSearchPanel() {
         if (!panelCoordinator.toggle(ReaderPanel.SEARCH)) return
         applyMenuColors(ReadingThemePalette.colors(readerSettings.theme))
-        searchPanelBinding.searchInput.requestFocus()
+        searchController.requestInputFocus()
     }
 
     private fun closeSearchPanel() {
@@ -731,6 +720,8 @@ class ReadiumEpubActivity : FragmentActivity() {
             ReadingThemePalette.names[themeIndex],
             listOf(topControls, bottomControls, compactProgressSlider, settingsPanel, contentsPanel, searchPanel)
         )
+        if (::searchController.isInitialized) searchController.refreshTheme()
+        if (::contentsController.isInitialized) contentsController.refreshTheme()
         readerWindow.updateSystemBarContrast(palette.surface)
     }
 
@@ -808,7 +799,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         private const val ACTION_CANCEL_EXTENDED_QUOTE = 0x4229
         private const val MAX_EXTENDED_QUOTE_PART_LENGTH = 6_000
         private const val MENU_SURFACE_TAG = "reader_menu_surface"
-        private const val MENU_CARD_TAG = "reader_menu_card"
     }
 
     private data class ExtendedQuotePart(val text: String, val locator: Locator)
