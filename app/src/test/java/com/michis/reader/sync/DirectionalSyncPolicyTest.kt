@@ -42,6 +42,45 @@ class DirectionalSyncPolicyTest {
         assertEquals(25L, byIdentifier["local-only"])
     }
 
+    @Test
+    fun localQuoteIsUploadedEvenWhenRemoteReadingStateIsNewer() {
+        val remote = book(updatedAt = 500).put("annotations", JSONArray())
+        val localQuote = versioned("local-quote", 200).put("kind", "cita")
+        val local = book(updatedAt = 100).put("annotations", JSONArray().put(localQuote))
+
+        val result = DirectionalSyncPolicy.mergeBookState(remote, local)
+
+        assertTrue(result.containsLocalChanges)
+        assertEquals("local-quote", result.value.getJSONArray("annotations").getJSONObject(0).getString("syncId"))
+        assertEquals(500L, result.value.getLong("updatedAt"))
+    }
+
+    @Test
+    fun quotesCreatedOnDifferentDevicesAreBothPreserved() {
+        val remote = book(400).put("annotations", JSONArray().put(versioned("remote-quote", 300)))
+        val local = book(200).put("annotations", JSONArray().put(versioned("local-quote", 150)))
+
+        val annotations = DirectionalSyncPolicy.mergeBookState(remote, local).value.getJSONArray("annotations")
+        val identifiers = (0 until annotations.length()).map {
+            annotations.getJSONObject(it).getString("syncId")
+        }.toSet()
+
+        assertEquals(setOf("remote-quote", "local-quote"), identifiers)
+    }
+
+    private fun book(updatedAt: Long) = JSONObject()
+        .put("syncId", "book")
+        .put("documentKey", "fingerprint")
+        .put("updatedAt", updatedAt)
+        .put("annotations", JSONArray())
+        .put("dictionaryCategories", JSONArray())
+        .put("dictionaryLinks", JSONArray())
+        .put("linkedDictionaryDocumentKeys", JSONArray())
+
+    private fun versioned(identifier: String, updatedAt: Long) = JSONObject()
+        .put("syncId", identifier)
+        .put("updatedAt", updatedAt)
+
     private fun tombstone(type: String, identifier: String, deletedAt: Long) = JSONObject()
         .put("entityType", type)
         .put("syncId", identifier)

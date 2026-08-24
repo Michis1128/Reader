@@ -28,15 +28,17 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         val localByKey = localRoot.documentsByKey()
         val remoteEntries = manifest.optJSONObject("books") ?: JSONObject()
         val remoteDocuments = JSONArray()
+        val remoteVersions = RemoteBookStateVersionRepository(context, accountIdentifier)
+        val downloadedVersions = mutableListOf<Pair<String, Long>>()
         remoteEntries.keys().forEach { key ->
             val entry = remoteEntries.optJSONObject(key) ?: return@forEach
-            val local = localByKey[key] ?: return@forEach
-            val localIsUntouched = local.optDouble("progress", 0.0) <= 0.0 && local.optInt("readerLocation", 0) <= 0
-            if (entry.optLong("updatedAt", 0) > stateUpdatedAt(local) || localIsUntouched) {
-                val fileName = entry.optString("fileName", stateFileName(key))
-                repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)?.let { bytes ->
-                    remoteDocuments.put(JSONObject(bytes.toString(Charsets.UTF_8)))
-                }
+            if (localByKey[key] == null) return@forEach
+            val remoteVersion = entry.optLong("updatedAt", 0)
+            if (remoteVersions.wasApplied(key, remoteVersion)) return@forEach
+            val fileName = entry.optString("fileName", stateFileName(key))
+            repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)?.let { bytes ->
+                remoteDocuments.put(JSONObject(bytes.toString(Charsets.UTF_8)))
+                downloadedVersions += key to remoteVersion
             }
         }
         if (remoteDocuments.length() > 0 || (manifest.optJSONArray("tombstones")?.length() ?: 0) > 0) {
@@ -44,6 +46,7 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
             mergeRemoteRoot(JSONObject().put("schemaVersion", 2)
                 .put("documents", remoteDocuments)
                 .put("tombstones", manifest.optJSONArray("tombstones") ?: JSONArray()))
+            downloadedVersions.forEach { (key, version) -> remoteVersions.markApplied(key, version) }
         }
 
         onStep("5/7 · Preparando cambios locales")
@@ -55,11 +58,21 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
             val localUpdatedAt = stateUpdatedAt(document)
             val previous = remoteEntries.optJSONObject(key)
             val fileName = previous?.optString("fileName")?.takeIf { it.isNotBlank() } ?: stateFileName(key)
-            if (previous == null || localUpdatedAt > previous.optLong("updatedAt", 0)) {
-                onStep("6/7 · Subiendo ${document.optString("title", "libro")}")
-                repository.uploadNamedJson(accessToken, folder.identifier, fileName, document.toString().toByteArray())
+            val remoteDocument = previous?.let {
+                repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)
+                    ?.let { bytes -> JSONObject(bytes.toString(Charsets.UTF_8)) }
             }
-            newEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", localUpdatedAt))
+            val merge = remoteDocument?.let { DirectionalSyncPolicy.mergeBookState(it, document) }
+            val payload = merge?.value ?: document
+            val shouldUpload = previous == null || localUpdatedAt > previous.optLong("updatedAt", 0) ||
+                merge?.containsLocalChanges == true
+            val remoteRevision = if (shouldUpload) {
+                onStep("6/7 · Subiendo ${document.optString("title", "libro")}")
+                repository.uploadNamedJson(accessToken, folder.identifier, fileName, payload.toString().toByteArray())
+                maxOf(localUpdatedAt, System.currentTimeMillis(), (previous?.optLong("updatedAt", 0) ?: 0) + 1)
+            } else previous.optLong("updatedAt", localUpdatedAt)
+            newEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", remoteRevision))
+            remoteVersions.markApplied(key, remoteRevision)
         }
         val updatedManifest = JSONObject()
             .put("schemaVersion", MANIFEST_SCHEMA_VERSION)
@@ -89,15 +102,17 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         val localByKey = localRoot().documentsByKey()
         val remoteEntries = manifest.optJSONObject("books") ?: JSONObject()
         val remoteDocuments = JSONArray()
+        val remoteVersions = RemoteBookStateVersionRepository(context, accountIdentifier)
+        val downloadedVersions = mutableListOf<Pair<String, Long>>()
         remoteEntries.keys().forEach { key ->
-            val local = localByKey[key] ?: return@forEach
+            if (localByKey[key] == null) return@forEach
             val entry = remoteEntries.optJSONObject(key) ?: return@forEach
-            val localIsUntouched = local.optDouble("progress", 0.0) <= 0.0 &&
-                local.optInt("readerLocation", 0) <= 0 && local.optLong("lastOpenedAt", 0) == 0L
-            if (!localIsUntouched && entry.optLong("updatedAt", 0) <= stateUpdatedAt(local)) return@forEach
+            val remoteVersion = entry.optLong("updatedAt", 0)
+            if (remoteVersions.wasApplied(key, remoteVersion)) return@forEach
             val fileName = entry.optString("fileName", stateFileName(key))
             repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)?.let { bytes ->
                 remoteDocuments.put(JSONObject(bytes.toString(Charsets.UTF_8)))
+                downloadedVersions += key to remoteVersion
             }
         }
         if (remoteDocuments.length() > 0 || (manifest.optJSONArray("tombstones")?.length() ?: 0) > 0) {
@@ -105,6 +120,7 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
             mergeRemoteRoot(JSONObject().put("schemaVersion", 2)
                 .put("documents", remoteDocuments)
                 .put("tombstones", manifest.optJSONArray("tombstones") ?: JSONArray()))
+            downloadedVersions.forEach { (key, version) -> remoteVersions.markApplied(key, version) }
         }
         onStep("5/5 · Descarga completada")
         return FullSyncResult(localByKey.size, downloadedBookCount)
@@ -122,6 +138,7 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         val remoteEntries = manifest.optJSONObject("books") ?: JSONObject()
         val updatedEntries = JSONObject(remoteEntries.toString())
         val localRoot = localRoot()
+        val remoteVersions = RemoteBookStateVersionRepository(context, accountIdentifier)
         var uploadedCount = 0
         localRoot.documents().forEach { document ->
             val key = document.optString("documentKey")
@@ -129,10 +146,25 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
             val localUpdatedAt = stateUpdatedAt(document)
             val previous = remoteEntries.optJSONObject(key)
             val fileName = previous?.optString("fileName")?.takeIf { it.isNotBlank() } ?: stateFileName(key)
-            if (DirectionalSyncPolicy.shouldUpload(localUpdatedAt, previous?.optLong("updatedAt", 0))) {
+            val remoteDocument = previous?.let {
+                repository.downloadNamedJsonOrNull(accessToken, folder.identifier, fileName)
+                    ?.let { bytes -> JSONObject(bytes.toString(Charsets.UTF_8)) }
+            }
+            val merge = remoteDocument?.let { DirectionalSyncPolicy.mergeBookState(it, document) }
+            val payload = merge?.value ?: document
+            val shouldUpload = previous == null ||
+                DirectionalSyncPolicy.shouldUpload(localUpdatedAt, previous.optLong("updatedAt", 0)) ||
+                merge?.containsLocalChanges == true
+            if (shouldUpload) {
                 onStep("3/4 · Subiendo ${document.optString("title", "libro")}")
-                repository.uploadNamedJson(accessToken, folder.identifier, fileName, document.toString().toByteArray())
-                updatedEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", localUpdatedAt))
+                repository.uploadNamedJson(accessToken, folder.identifier, fileName, payload.toString().toByteArray())
+                val remoteRevision = maxOf(
+                    localUpdatedAt,
+                    System.currentTimeMillis(),
+                    (previous?.optLong("updatedAt", 0) ?: 0) + 1
+                )
+                updatedEntries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", remoteRevision))
+                remoteVersions.markApplied(key, remoteRevision)
                 uploadedCount++
             }
         }
@@ -173,14 +205,21 @@ class IncrementalLibrarySyncCoordinator(private val context: Context) {
         localRoot = localRoot()
         localDocument = localRoot.documentByIdentifier(documentIdentifier) ?: return
         val updatedAt = stateUpdatedAt(localDocument)
-        val fileName = entries.optJSONObject(key)?.optString("fileName")?.takeIf { it.isNotBlank() } ?: stateFileName(key)
+        val previousEntry = entries.optJSONObject(key)
+        val fileName = previousEntry?.optString("fileName")?.takeIf { it.isNotBlank() } ?: stateFileName(key)
         repository.uploadNamedJson(accessToken, folder.identifier, fileName, localDocument.toString().toByteArray())
-        entries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", updatedAt))
+        val remoteRevision = maxOf(
+            updatedAt,
+            System.currentTimeMillis(),
+            (previousEntry?.optLong("updatedAt", 0) ?: 0) + 1
+        )
+        entries.put(key, JSONObject().put("fileName", fileName).put("updatedAt", remoteRevision))
         manifest.put("schemaVersion", MANIFEST_SCHEMA_VERSION)
             .put("books", entries)
             .put("tombstones", localRoot.optJSONArray("tombstones") ?: JSONArray())
             .put("updatedAt", System.currentTimeMillis())
         repository.uploadNamedJson(accessToken, folder.identifier, MANIFEST_FILE_NAME, manifest.toString(2).toByteArray())
+        RemoteBookStateVersionRepository(context, accountIdentifier).markApplied(key, remoteRevision)
     }
 
     private fun mergeRemoteRoot(root: JSONObject) {
