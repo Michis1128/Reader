@@ -160,6 +160,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             settings = readerSettings,
             scope = lifecycleScope,
             readerRoot = rootLayout,
+            publicationView = screenBinding.navigatorContainer,
             navigator = { if (::navigator.isInitialized) navigator else null },
             applyMenuColors = ::applyMenuColors,
             presentationChanged = ::refreshDynamicPageCount
@@ -356,12 +357,7 @@ class ReadiumEpubActivity : FragmentActivity() {
                 initialPreferences = initialPreferences,
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
                     override fun onPageLoaded() {
-                        screenBinding.navigatorContainer.alpha = 0f
-                        appearanceController.applyDocumentLayout {
-                            screenBinding.navigatorContainer.post {
-                                screenBinding.navigatorContainer.alpha = 1f
-                            }
-                        }
+                        appearanceController.prepareLoadedPage()
                     }
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())

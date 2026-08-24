@@ -8,8 +8,11 @@ import android.content.res.Configuration
 import android.view.View
 import android.widget.Toast
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.preferences.ColumnCount
@@ -28,11 +31,13 @@ internal class EpubAppearanceController(
     private val settings: ReaderSettingsRepository,
     private val scope: CoroutineScope,
     private val readerRoot: View,
+    private val publicationView: View,
     private val navigator: () -> EpubNavigatorFragment?,
     private val applyMenuColors: (Pair<Int, Int>) -> Unit,
     private val presentationChanged: () -> Unit
 ) {
     private var currentPreferences = EpubPreferences(publisherStyles = false)
+    private var presentationUpdateJob: Job? = null
 
     fun initialPreferences(): EpubPreferences {
         val themeIndex = ReadingThemePalette.names.indexOf(settings.theme).coerceAtLeast(0)
@@ -74,26 +79,59 @@ internal class EpubAppearanceController(
     fun submit(changes: EpubPreferences) {
         currentPreferences += changes
         val targetNavigator = navigator() ?: return
+        presentationUpdateJob?.cancel()
+        publicationView.alpha = 0f
         targetNavigator.submitPreferences(currentPreferences)
-        readerRoot.postDelayed(::applyDocumentLayout, 80)
-        readerRoot.postDelayed(::applyDocumentLayout, 240)
-        presentationChanged()
+        presentationUpdateJob = scope.launch {
+            // Readium updates every loaded resource from this single preference state. Waiting for
+            // the next render cycles prevents exposing the previous pagination while its WebViews
+            // receive the new CSS variables.
+            awaitRenderCycle()
+            awaitRenderCycle()
+            delay(PRESENTATION_SETTLE_DELAY_MILLIS)
+            applyDocumentLayoutNow(targetNavigator)
+            awaitRenderCycle()
+            presentationChanged()
+            publicationView.alpha = 1f
+        }
     }
 
-    fun applyDocumentLayout(applied: () -> Unit = {}) {
-        val targetNavigator = navigator()
-        if (targetNavigator == null) {
-            readerRoot.postDelayed({ applyDocumentLayout(applied) }, 120)
-            return
+    fun prepareLoadedPage(applied: () -> Unit = {}) {
+        presentationUpdateJob?.cancel()
+        publicationView.alpha = 0f
+        presentationUpdateJob = scope.launch {
+            val targetNavigator = awaitNavigator()
+            applyDocumentLayoutNow(targetNavigator)
+            awaitRenderCycle()
+            presentationChanged()
+            publicationView.alpha = 1f
+            applied()
         }
+    }
+
+    private suspend fun awaitNavigator(): EpubNavigatorFragment {
+        val targetNavigator = navigator()
+        if (targetNavigator != null) return targetNavigator
+        while (true) {
+            delay(NAVIGATOR_RETRY_DELAY_MILLIS)
+            navigator()?.let { return it }
+        }
+    }
+
+    private suspend fun applyDocumentLayoutNow(targetNavigator: EpubNavigatorFragment) {
         val marginMode = settings.pageMarginMode
         val top = settings.customPageMarginTopDp
         val right = settings.customPageMarginRightDp
         val bottom = settings.customPageMarginBottomDp
         val left = settings.customPageMarginLeftDp
-        scope.launch {
-            targetNavigator.evaluateJavascript(documentLayoutScript(marginMode, top, right, bottom, left))
-            applied()
+        targetNavigator.evaluateJavascript(documentLayoutScript(marginMode, top, right, bottom, left))
+    }
+
+    private suspend fun awaitRenderCycle() {
+        suspendCancellableCoroutine { continuation ->
+            publicationView.postOnAnimation {
+                if (continuation.isActive) continuation.resume(Unit) { _, _, _ -> }
+            }
         }
     }
 
@@ -164,6 +202,8 @@ internal class EpubAppearanceController(
         """.trimIndent()
 
     private companion object {
+        const val NAVIGATOR_RETRY_DELAY_MILLIS = 16L
+        const val PRESENTATION_SETTLE_DELAY_MILLIS = 48L
         val FONT_NAMES = arrayOf(
             "Sans Serif", "Serif", "Cursiva", "Monoespaciada", "OpenDyslexic", "Accessible DfA", "iA Writer Duospace"
         )
