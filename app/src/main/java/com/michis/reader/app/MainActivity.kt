@@ -21,7 +21,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
-    private enum class MainSection { LIBRARY, CURRENTLY_READING, ANNOTATIONS, DICTIONARIES }
+    private enum class MainSection { LIBRARY, CURRENTLY_READING, COMPLETED, ANNOTATIONS, DICTIONARIES }
     private lateinit var database: ReaderDatabase
     private lateinit var documentList: LinearLayout
     private lateinit var emptyMessage: TextView
@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
         searchInput.addTextChangedListener(SimpleTextWatcher(::refreshCurrentSection))
         binding.libraryTabButton.setOnClickListener { openLibraryRoot() }
         binding.currentlyReadingTabButton.setOnClickListener { showCurrentlyReading() }
+        binding.completedTabButton.setOnClickListener { showCompleted() }
         binding.quotesTabButton.setOnClickListener { showAnnotations("cita") }
         binding.bookmarksTabButton.setOnClickListener { showAnnotations("marcador") }
         binding.dictionariesTabButton.setOnClickListener { showDictionaries() }
@@ -141,8 +142,13 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         AppThemePalette.apply(this)
         if (::syncController.isInitialized) syncController.refreshStatus()
-        if (::librarySections.isInitialized && mainSection == MainSection.CURRENTLY_READING) {
-            refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
+        if (::librarySections.isInitialized) {
+            when (mainSection) {
+                MainSection.LIBRARY -> refreshLibrary(searchInput.text?.toString().orEmpty())
+                MainSection.CURRENTLY_READING -> refreshCurrentlyReading(searchInput.text?.toString().orEmpty())
+                MainSection.COMPLETED -> refreshCompleted(searchInput.text?.toString().orEmpty())
+                else -> Unit
+            }
         }
     }
 
@@ -184,6 +190,7 @@ class MainActivity : ComponentActivity() {
         when (mainSection) {
             MainSection.LIBRARY -> refreshLibrary(query)
             MainSection.CURRENTLY_READING -> refreshCurrentlyReading(query)
+            MainSection.COMPLETED -> refreshCompleted(query)
             MainSection.ANNOTATIONS, MainSection.DICTIONARIES -> Unit
         }
     }
@@ -257,6 +264,32 @@ class MainActivity : ComponentActivity() {
                 "Los libros que abras aparecerán aquí, empezando por el más reciente."
             } else {
                 "No hay lecturas recientes que coincidan con la búsqueda."
+            }
+            documentList.addView(emptyMessage)
+        }
+        libraryViewRenderer.render(
+            documents.map(LibraryItem::Document),
+            libraryBrowserState.displayMode,
+            showParentFolder = false,
+            allowCustomOrdering = false
+        )
+        AppThemePalette.apply(this)
+    }
+
+    private fun showCompleted() {
+        mainSection = MainSection.COMPLETED
+        refreshCompleted(searchInput.text?.toString().orEmpty())
+    }
+
+    private fun refreshCompleted(query: String) {
+        documentList.removeAllViews()
+        libraryPathText.visibility = View.GONE
+        val documents = database.findCompletedDocuments(query)
+        if (documents.isEmpty()) {
+            emptyMessage.text = if (query.isBlank()) {
+                "Los libros terminados aparecerán aquí."
+            } else {
+                "No hay libros terminados que coincidan con la búsqueda."
             }
             documentList.addView(emptyMessage)
         }

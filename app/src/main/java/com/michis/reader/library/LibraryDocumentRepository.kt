@@ -40,7 +40,7 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
     fun findDocuments(query: String): List<LibraryDocument> {
         val search = "%${query.trim()}%"
         return database.readableDatabase.rawQuery(
-            "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at FROM documents " +
+            "$DOCUMENT_COLUMNS FROM documents " +
                 "WHERE format = 'EPUB' AND (title LIKE ? OR author LIKE ? OR format LIKE ? OR file_name LIKE ?) " +
                 "ORDER BY last_opened_at DESC, title COLLATE NOCASE",
             arrayOf(search, search, search, search)
@@ -50,10 +50,20 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
     fun findCurrentlyReadingDocuments(query: String): List<LibraryDocument> {
         val search = "%${query.trim()}%"
         return database.readableDatabase.rawQuery(
-            "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at FROM documents " +
-                "WHERE format = 'EPUB' AND last_opened_at > 0 " +
+            "$DOCUMENT_COLUMNS FROM documents " +
+                "WHERE format = 'EPUB' AND last_opened_at > 0 AND completed_at = 0 " +
                 "AND (title LIKE ? OR author LIKE ? OR file_name LIKE ?) " +
                 "ORDER BY last_opened_at DESC, title COLLATE NOCASE",
+            arrayOf(search, search, search)
+        ).use(::readDocuments)
+    }
+
+    fun findCompletedDocuments(query: String): List<LibraryDocument> {
+        val search = "%${query.trim()}%"
+        return database.readableDatabase.rawQuery(
+            "$DOCUMENT_COLUMNS FROM documents WHERE format = 'EPUB' AND completed_at > 0 " +
+                "AND (title LIKE ? OR author LIKE ? OR file_name LIKE ?) " +
+                "ORDER BY completed_at DESC, title COLLATE NOCASE",
             arrayOf(search, search, search)
         ).use(::readDocuments)
     }
@@ -66,15 +76,14 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
             "library_folder_remote_id = ?"
         }
         return database.readableDatabase.rawQuery(
-            "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at " +
-                "FROM documents WHERE format = 'EPUB' AND $condition ORDER BY last_opened_at DESC, title COLLATE NOCASE",
+            "$DOCUMENT_COLUMNS FROM documents WHERE format = 'EPUB' AND $condition " +
+                "ORDER BY last_opened_at DESC, title COLLATE NOCASE",
             folderRemoteIdentifier?.let { arrayOf(it) }
         ).use(::readDocuments)
     }
 
     fun findDocument(identifier: Long): LibraryDocument? = database.readableDatabase.rawQuery(
-        "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at " +
-            "FROM documents WHERE identifier = ? AND format = 'EPUB'",
+        "$DOCUMENT_COLUMNS FROM documents WHERE identifier = ? AND format = 'EPUB'",
         arrayOf(identifier.toString())
     ).use { cursor -> if (cursor.moveToFirst()) cursor.toLibraryDocument() else null }
 
@@ -159,6 +168,10 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
 
     fun updateProgress(identifier: Long, location: Int, progress: Float) {
         val now = System.currentTimeMillis()
+        val shouldMarkCompleted = progress >= COMPLETION_THRESHOLD && database.readableDatabase.rawQuery(
+            "SELECT completed_at FROM documents WHERE identifier = ?",
+            arrayOf(identifier.toString())
+        ).use { cursor -> cursor.moveToFirst() && cursor.getLong(0) <= 0L }
         database.writableDatabase.update(
             "documents",
             ContentValues().apply {
@@ -166,6 +179,7 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
                 put("progress", progress.coerceIn(0f, 1f))
                 put("last_opened_at", now)
                 put("updated_at", now)
+                if (shouldMarkCompleted) put("completed_at", now)
             },
             "identifier = ?",
             arrayOf(identifier.toString())
@@ -184,11 +198,31 @@ internal class LibraryDocumentRepository(private val database: SQLiteOpenHelper)
         )
     }
 
+    fun setDocumentCompleted(identifier: Long, completed: Boolean): Int {
+        val now = System.currentTimeMillis()
+        return database.writableDatabase.update(
+            "documents",
+            ContentValues().apply {
+                put("completed_at", if (completed) now else 0)
+                put("updated_at", now)
+            },
+            "identifier = ?",
+            arrayOf(identifier.toString())
+        )
+    }
+
     private fun readDocuments(cursor: android.database.Cursor): List<LibraryDocument> = buildList {
         while (cursor.moveToNext()) add(cursor.toLibraryDocument())
     }
 
     private fun android.database.Cursor.toLibraryDocument() = LibraryDocument(
-        getLong(0), getString(1), getString(2), getString(3), getString(4), getString(5), getFloat(6), getLong(7)
+        getLong(0), getString(1), getString(2), getString(3), getString(4), getString(5), getFloat(6), getLong(7),
+        getLong(8)
     )
+
+    private companion object {
+        const val DOCUMENT_COLUMNS =
+            "SELECT identifier, uri, file_name, title, author, format, progress, last_opened_at, completed_at"
+        const val COMPLETION_THRESHOLD = 0.995f
+    }
 }

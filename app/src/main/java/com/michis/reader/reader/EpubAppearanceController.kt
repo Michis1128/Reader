@@ -29,7 +29,8 @@ internal class EpubAppearanceController(
     private val scope: CoroutineScope,
     private val readerRoot: View,
     private val navigator: () -> EpubNavigatorFragment?,
-    private val applyMenuColors: (Pair<Int, Int>) -> Unit
+    private val applyMenuColors: (Pair<Int, Int>) -> Unit,
+    private val presentationChanged: () -> Unit
 ) {
     private var currentPreferences = EpubPreferences(publisherStyles = false)
 
@@ -76,12 +77,13 @@ internal class EpubAppearanceController(
         targetNavigator.submitPreferences(currentPreferences)
         readerRoot.postDelayed(::applyDocumentLayout, 80)
         readerRoot.postDelayed(::applyDocumentLayout, 240)
+        presentationChanged()
     }
 
-    fun applyDocumentLayout() {
+    fun applyDocumentLayout(applied: () -> Unit = {}) {
         val targetNavigator = navigator()
         if (targetNavigator == null) {
-            readerRoot.postDelayed(::applyDocumentLayout, 120)
+            readerRoot.postDelayed({ applyDocumentLayout(applied) }, 120)
             return
         }
         val marginMode = settings.pageMarginMode
@@ -91,6 +93,7 @@ internal class EpubAppearanceController(
         val left = settings.customPageMarginLeftDp
         scope.launch {
             targetNavigator.evaluateJavascript(documentLayoutScript(marginMode, top, right, bottom, left))
+            applied()
         }
     }
 
