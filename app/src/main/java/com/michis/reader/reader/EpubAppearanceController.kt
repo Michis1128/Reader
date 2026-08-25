@@ -174,32 +174,7 @@ internal class EpubAppearanceController(
         right: Float,
         bottom: Float,
         left: Float
-    ): String =
-        EpubContentStyles.installationScript + "\n" + """
-        (() => {
-          const elements = [document.documentElement, document.body].filter(Boolean);
-          elements.forEach(element => {
-            element.style.setProperty('justify-content', 'flex-start', 'important');
-            element.style.setProperty('align-content', 'start', 'important');
-          });
-          const root = document.documentElement;
-          const body = document.body;
-          if (root && body) {
-            const readiumPageGutter = getComputedStyle(root).getPropertyValue('--RS__pageGutter').trim();
-            if (readiumPageGutter) {
-              root.style.setProperty('--RS__maxLineLength', 'var(--RS__viewportWidth, 100vw)', 'important');
-              body.style.setProperty('width', '100%', 'important');
-              body.style.setProperty('max-width', '100%', 'important');
-              body.style.setProperty('box-sizing', 'border-box', 'important');
-              if ('${marginMode.preferenceValue}' === 'custom') {
-                body.style.setProperty('padding', '${top}px ${right}px ${bottom}px ${left}px', 'important');
-              } else {
-                body.style.removeProperty('padding');
-              }
-            }
-          }
-        })();
-        """.trimIndent()
+    ): String = EpubContentStyles.installationScript(marginMode, top, right, bottom, left)
 
     private companion object {
         const val NAVIGATOR_RETRY_DELAY_MILLIS = 16L

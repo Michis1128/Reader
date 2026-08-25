@@ -342,7 +342,13 @@ class ReadiumEpubActivity : FragmentActivity() {
             val opener = PublicationOpener(DefaultPublicationParser(this@ReadiumEpubActivity, httpClient, assetRetriever, null))
             val url = Uri.parse(document.uri).toAbsoluteUrl() ?: run { showError("Ubicación no válida"); return@launch }
             val asset = assetRetriever.retrieve(url).getOrElse { showError(it.toString()); return@launch }
-            val opened = opener.open(asset, allowUserInteraction = false).getOrElse { showError(it.toString()); return@launch }
+            val opened = opener.open(
+                asset,
+                allowUserInteraction = false,
+                onCreatePublication = {
+                    container = EpubResourceStyleInjector.decorate(container, manifest, readerSettings)
+                }
+            ).getOrElse { showError(it.toString()); return@launch }
             publication = opened
             searchController.attachPublication(opened)
             pagePositions = opened.positions()
