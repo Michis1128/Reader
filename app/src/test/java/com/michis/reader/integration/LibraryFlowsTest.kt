@@ -46,6 +46,7 @@ class LibraryFlowsTest {
             "content://missing.provider/library/book.epub", "book.epub"
         )
         database.updateProgress(documentIdentifier, 25, 0.5f)
+        database.setDocumentCompleted(documentIdentifier, true)
         val locatorJson = """{"href":"chapter.xhtml","type":"application/xhtml+xml"}"""
         database.addAnnotation(documentIdentifier, "cita", "Fragmento", "Nota", 123, 25, 4, locatorJson)
         val category = database.createDictionaryCategory(documentIdentifier, "Lugares")
@@ -59,6 +60,8 @@ class LibraryFlowsTest {
         assertEquals(3, snapshot.itemCount)
         assertEquals("sha256-metadata-fallback", document.getString("documentKeyType"))
         assertEquals(25, document.getInt("readerLocation"))
+        assertTrue(document.getLong("completedAt") > 0)
+        assertEquals(documentIdentifier, database.findCompletedDocuments().single().identifier)
         assertEquals(1, document.getJSONArray("annotations").length())
         assertEquals(locatorJson, document.getJSONArray("annotations").getJSONObject(0).getString("locatorJson"))
         assertEquals(1, document.getJSONArray("dictionaryCategories").length())
@@ -76,6 +79,7 @@ class LibraryFlowsTest {
 
         assertTrue(root.getJSONArray("tombstones").length() >= 3)
         assertEquals(0.0, root.getJSONArray("documents").getJSONObject(0).getDouble("progress"), 0.0)
+        assertEquals(0L, root.getJSONArray("documents").getJSONObject(0).getLong("completedAt"))
     }
 
     @Test

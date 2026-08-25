@@ -14,7 +14,8 @@ import org.json.JSONObject
 
 data class LibraryDocument(
     val identifier: Long, val uri: String, val fileName: String, val title: String,
-    val author: String, val format: String, val progress: Float, val lastOpenedAt: Long
+    val author: String, val format: String, val progress: Float, val lastOpenedAt: Long,
+    val completedAt: Long
 )
 data class LibraryFolder(val remoteIdentifier: String, val parentRemoteIdentifier: String?, val name: String)
 
@@ -51,7 +52,7 @@ data class PendingSyncDeletion(val entityType: String, val syncIdentifier: Strin
 data class DeletionMergeResult(val appliedDeletions: Int, val ignoredLocalNewer: Int, val alreadyAbsent: Int)
 data class BookResetResult(val annotationsDeleted: Int, val dictionaryEntriesDeleted: Int, val dictionaryCategoriesDeleted: Int)
 
-class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 10) {
+class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_library.db", null, 11) {
     private val libraryDocuments by lazy { LibraryDocumentRepository(this) }
     private val annotationsRepository by lazy { AnnotationRepository(this) }
     private val dictionaries by lazy { DictionaryRepository(this) }
@@ -68,6 +69,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             file_name TEXT NOT NULL, title TEXT NOT NULL, author TEXT NOT NULL DEFAULT '',
             format TEXT NOT NULL, progress REAL NOT NULL DEFAULT 0,
             reader_location INTEGER NOT NULL DEFAULT 0, last_opened_at INTEGER NOT NULL DEFAULT 0,
+            completed_at INTEGER NOT NULL DEFAULT 0,
             added_at INTEGER NOT NULL, sync_id TEXT NOT NULL UNIQUE, updated_at INTEGER NOT NULL,
             library_folder_remote_id TEXT)""")
         createLibraryFoldersTable(database)
@@ -112,6 +114,9 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             !hasColumn(database, "annotations", "locator_json")
         ) {
             database.execSQL("ALTER TABLE annotations ADD COLUMN locator_json TEXT NOT NULL DEFAULT ''")
+        }
+        if (oldVersion < 11 && hasTable(database, "documents") && !hasColumn(database, "documents", "completed_at")) {
+            database.execSQL("ALTER TABLE documents ADD COLUMN completed_at INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -228,6 +233,7 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
             put("reader_location", 0)
             // Distingue un reinicio intencional de un EPUB recién importado.
             put("last_opened_at", RESET_LAST_OPENED_SENTINEL)
+            put("completed_at", 0)
             put("updated_at", now)
         }, "identifier = ?", arrayOf(identifier.toString()))
         return BookResetResult(annotations.size, entries.size, categories.size)
@@ -240,6 +246,11 @@ class ReaderDatabase(context: Context) : SQLiteOpenHelper(context, "reader_libra
 
     fun markDocumentOpened(identifier: Long, openedAt: Long = System.currentTimeMillis()) =
         libraryDocuments.markDocumentOpened(identifier, openedAt)
+
+    fun setDocumentCompleted(identifier: Long, completed: Boolean) =
+        libraryDocuments.setDocumentCompleted(identifier, completed)
+
+    fun findCompletedDocuments(query: String = "") = libraryDocuments.findCompletedDocuments(query)
 
     fun addAnnotation(
         documentIdentifier: Long,

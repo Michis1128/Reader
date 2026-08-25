@@ -34,21 +34,24 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
                 val localUpdatedAt = metadata("documents", localDocumentIdentifier).updatedAt
                 val remoteUpdatedAt = remoteDocument.optLong("updatedAt", 0)
                 val localReadingState = database.readableDatabase.rawQuery(
-                    "SELECT progress, reader_location, last_opened_at FROM documents WHERE identifier = ?",
+                    "SELECT progress, reader_location, last_opened_at, completed_at FROM documents WHERE identifier = ?",
                     arrayOf(localDocumentIdentifier.toString())
                 ).use { cursor ->
-                    if (cursor.moveToFirst()) Triple(cursor.getDouble(0), cursor.getInt(1), cursor.getLong(2))
-                    else Triple(0.0, 0, 0L)
+                    if (cursor.moveToFirst()) LocalReadingState(
+                        cursor.getDouble(0), cursor.getInt(1), cursor.getLong(2), cursor.getLong(3)
+                    ) else LocalReadingState(0.0, 0, 0L, 0L)
                 }
-                val localIsUntouched = localReadingState.first <= 0.0 &&
-                    localReadingState.second <= 0 && localReadingState.third == 0L
+                val localIsUntouched = localReadingState.progress <= 0.0 &&
+                    localReadingState.location <= 0 && localReadingState.lastOpenedAt == 0L
                 val remoteHasReadingActivity = remoteDocument.optDouble("progress", 0.0) > 0.0 ||
-                    remoteDocument.optInt("readerLocation", 0) > 0 || remoteDocument.optLong("lastOpenedAt", 0) > 0
+                    remoteDocument.optInt("readerLocation", 0) > 0 || remoteDocument.optLong("lastOpenedAt", 0) > 0 ||
+                    remoteDocument.optLong("completedAt", 0) > 0
                 if (remoteUpdatedAt > localUpdatedAt || (localIsUntouched && remoteHasReadingActivity)) {
                     writableDatabase.update("documents", ContentValues().apply {
                         put("progress", remoteDocument.optDouble("progress", 0.0).coerceIn(0.0, 1.0))
                         put("reader_location", remoteDocument.optInt("readerLocation", 0).coerceAtLeast(0))
                         put("last_opened_at", remoteDocument.optLong("lastOpenedAt", 0))
+                        put("completed_at", remoteDocument.optLong("completedAt", 0))
                         put("updated_at", remoteUpdatedAt)
                     }, "identifier = ?", arrayOf(localDocumentIdentifier.toString()))
                     progressUpdates++
@@ -248,4 +251,10 @@ internal class SyncStateRepository(private val database: SQLiteOpenHelper) {
     }
 
     private data class SyncDeletionTarget(val table: String, val updatedAt: Long, val label: String)
+    private data class LocalReadingState(
+        val progress: Double,
+        val location: Int,
+        val lastOpenedAt: Long,
+        val completedAt: Long
+    )
 }

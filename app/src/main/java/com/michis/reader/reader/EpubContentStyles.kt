@@ -1,16 +1,46 @@
 package com.michis.reader.reader
 
+import com.michis.reader.settings.PageMarginMode
+
 /** Reglas propias aplicadas sobre Readium CSS a cada recurso EPUB adaptable. */
 internal object EpubContentStyles {
     const val STYLE_ELEMENT_IDENTIFIER = "michis-reader-content-overrides"
 
-    val stylesheet: String =
+    fun stylesheet(
+        marginMode: PageMarginMode,
+        topMarginDp: Float,
+        rightMarginDp: Float,
+        bottomMarginDp: Float,
+        leftMarginDp: Float
+    ): String {
+        val customPadding = if (marginMode == PageMarginMode.CUSTOM) {
+            "padding: ${topMarginDp}px ${rightMarginDp}px ${bottomMarginDp}px ${leftMarginDp}px !important;"
+        } else {
+            ""
+        }
+        return COMMON_STYLESHEET + "\n" +
         """
         :root,
         body {
           justify-content: flex-start !important;
           align-content: start !important;
         }
+
+        :root {
+          --RS__maxLineLength: 1000rem !important;
+        }
+
+        body {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+          $customPadding
+        }
+        """.trimIndent()
+    }
+
+    private val COMMON_STYLESHEET: String =
+        """
 
         p,
         li,
@@ -83,10 +113,21 @@ internal object EpubContentStyles {
         }
         """.trimIndent()
 
-    val installationScript: String
-        get() {
-            val encodedStylesheet = stylesheet.toJavaScriptStringLiteral()
-            return """
+    fun installationScript(
+        marginMode: PageMarginMode,
+        topMarginDp: Float,
+        rightMarginDp: Float,
+        bottomMarginDp: Float,
+        leftMarginDp: Float
+    ): String {
+        val encodedStylesheet = stylesheet(
+            marginMode,
+            topMarginDp,
+            rightMarginDp,
+            bottomMarginDp,
+            leftMarginDp
+        ).toJavaScriptStringLiteral()
+        return """
             (() => {
               const identifier = '$STYLE_ELEMENT_IDENTIFIER';
               let style = document.getElementById(identifier);
@@ -98,7 +139,7 @@ internal object EpubContentStyles {
               style.textContent = $encodedStylesheet;
             })();
             """.trimIndent()
-        }
+    }
 
     private fun String.toJavaScriptStringLiteral(): String = buildString(length + 2) {
         append('"')

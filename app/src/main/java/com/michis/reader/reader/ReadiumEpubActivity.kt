@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import org.json.JSONArray
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
@@ -43,6 +44,7 @@ import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.shared.publication.services.locateProgression
 import org.readium.r2.shared.publication.services.positions
 import org.readium.r2.shared.publication.Locator
+import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.asset.AssetRetriever
 import org.readium.r2.shared.util.getOrElse
 import org.readium.r2.shared.util.http.DefaultHttpClient
@@ -92,6 +94,9 @@ class ReadiumEpubActivity : FragmentActivity() {
     private val pendingExtendedQuoteParts = mutableListOf<ExtendedQuotePart>()
     private var sessionController: ReaderSessionController? = null
     private var pagePositions = emptyList<org.readium.r2.shared.publication.Locator>()
+    private var dynamicPageCount = 1
+    private var sliderNavigationJob: Job? = null
+    private var publication: Publication? = null
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -155,8 +160,10 @@ class ReadiumEpubActivity : FragmentActivity() {
             settings = readerSettings,
             scope = lifecycleScope,
             readerRoot = rootLayout,
+            publicationView = screenBinding.navigatorContainer,
             navigator = { if (::navigator.isInitialized) navigator else null },
-            applyMenuColors = ::applyMenuColors
+            applyMenuColors = ::applyMenuColors,
+            presentationChanged = ::refreshDynamicPageCount
         )
         rootLayout.setBackgroundColor(ReadingThemePalette.colors(readerSettings.theme).first)
         topControls = configureTopControls(screenBinding.screenTopControls)
@@ -237,15 +244,15 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    progressLabel.text = "Página ${progress + 1} de ${pagePositions.size.coerceAtLeast(1)}"
-                    navigateToPage(progress, animated = false)
+                    progressLabel.text = "Página ${progress + 1} de $dynamicPageCount aprox."
+                    navigateToDisplayPage(progress, animated = false)
                 }
             }
             override fun onStopTrackingTouch(seekBar: SeekBar) {
                 userIsDraggingProgress = false
-                sliderJumpOriginPage?.let { recordPageJump(it, seekBar.progress) }
+                sliderJumpOriginPage?.let { recordPageJump(it, displayPageToPositionIndex(seekBar.progress)) }
                 sliderJumpOriginPage = null
-                navigateToPage(seekBar.progress)
+                navigateToDisplayPage(seekBar.progress)
             }
         })
         binding.root.setBackgroundColor(AppThemePalette.forReader(this, readerSettings.theme).surface)
@@ -262,15 +269,15 @@ class ReadiumEpubActivity : FragmentActivity() {
             override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                 if (!fromUser) return
                 progressSlider.progress = progress
-                navigateToPage(progress, animated = false)
+                navigateToDisplayPage(progress, animated = false)
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
                 userIsDraggingProgress = false
                 progressSlider.progress = seekBar.progress
-                sliderJumpOriginPage?.let { recordPageJump(it, seekBar.progress) }
+                sliderJumpOriginPage?.let { recordPageJump(it, displayPageToPositionIndex(seekBar.progress)) }
                 sliderJumpOriginPage = null
-                navigateToPage(seekBar.progress)
+                navigateToDisplayPage(seekBar.progress)
             }
         })
     }
@@ -335,20 +342,28 @@ class ReadiumEpubActivity : FragmentActivity() {
             val opener = PublicationOpener(DefaultPublicationParser(this@ReadiumEpubActivity, httpClient, assetRetriever, null))
             val url = Uri.parse(document.uri).toAbsoluteUrl() ?: run { showError("Ubicación no válida"); return@launch }
             val asset = assetRetriever.retrieve(url).getOrElse { showError(it.toString()); return@launch }
-            val opened = opener.open(asset, allowUserInteraction = false).getOrElse { showError(it.toString()); return@launch }
+            val opened = opener.open(
+                asset,
+                allowUserInteraction = false,
+                onCreatePublication = {
+                    container = EpubResourceStyleInjector.decorate(container, manifest, readerSettings)
+                }
+            ).getOrElse { showError(it.toString()); return@launch }
+            publication = opened
             searchController.attachPublication(opened)
             pagePositions = opened.positions()
             val savedLocation = database.readerLocation(document.identifier)
             val initialLocator = pagePositions.firstOrNull { it.locations.position == savedLocation }
                 ?: opened.locateProgression(document.progress.toDouble().coerceIn(0.0, 1.0))
             val initialPreferences = appearanceController.initialPreferences()
+            screenBinding.navigatorContainer.alpha = 0f
             val factory = EpubNavigatorFactory(opened)
             supportFragmentManager.fragmentFactory = factory.createFragmentFactory(
                 initialLocator = initialLocator,
                 initialPreferences = initialPreferences,
                 paginationListener = object : EpubNavigatorFragment.PaginationListener {
                     override fun onPageLoaded() {
-                        appearanceController.applyDocumentLayout()
+                        appearanceController.prepareLoadedPage()
                     }
                 },
                 configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
@@ -358,8 +373,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
             navigator = supportFragmentManager.findFragmentByTag(NAVIGATOR_TAG) as EpubNavigatorFragment
             refreshDictionaryButton()
-            progressSlider.max = (pagePositions.size - 1).coerceAtLeast(1)
-            compactProgressSlider.max = progressSlider.max
+            refreshDynamicPageCount()
             contentsController.populate(document.title, opened.tableOfContents)
             observeProgress()
             decorationController.attach(opened, navigator)
@@ -529,7 +543,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             .putExtra(QuoteColorActivity.EXTRA_TEXT, selectedText)
             .putExtra(QuoteColorActivity.EXTRA_LOCATION, firstLocator.locations.position ?: 0)
             .putExtra(QuoteColorActivity.EXTRA_LOCATOR_JSON, locatorJson)
-            .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, progressSlider.progress + 1))
+            .putExtra(QuoteColorActivity.EXTRA_PAGE_NUMBER, displayPageForCurrentProgression() + 1))
     }
 
     private fun observeProgress() {
@@ -539,12 +553,60 @@ class ReadiumEpubActivity : FragmentActivity() {
                     val progression = locator.locations.totalProgression ?: return@collect
                     database.updateProgress(document.identifier, locator.locations.position ?: 0, progression.toFloat())
                     val pageIndex = ((locator.locations.position ?: 1) - 1).coerceIn(0, (pagePositions.size - 1).coerceAtLeast(0))
+                    val displayPage = progressionToDisplayPage(progression)
                     if (navigationHistory.confirmArrival(pageIndex)) updatePageJumpActions()
-                    if (!userIsDraggingProgress) progressSlider.progress = pageIndex
-                    if (!userIsDraggingProgress) compactProgressSlider.progress = pageIndex
-                    if (!userIsDraggingProgress) progressLabel.text = "Página ${pageIndex + 1} de ${pagePositions.size.coerceAtLeast(1)}"
+                    if (!userIsDraggingProgress) progressSlider.progress = displayPage
+                    if (!userIsDraggingProgress) compactProgressSlider.progress = displayPage
+                    if (!userIsDraggingProgress) progressLabel.text = "Página ${displayPage + 1} de $dynamicPageCount aprox."
                 }
             }
+        }
+    }
+
+    private fun refreshDynamicPageCount() {
+        if (!::document.isInitialized) return
+        EpubPageEstimator.estimate(this, document) { pages ->
+            dynamicPageCount = pages.coerceAtLeast(1)
+            val maximum = (dynamicPageCount - 1).coerceAtLeast(1)
+            progressSlider.max = maximum
+            compactProgressSlider.max = maximum
+            if (::navigator.isInitialized) {
+                val displayPage = displayPageForCurrentProgression()
+                progressSlider.progress = displayPage
+                compactProgressSlider.progress = displayPage
+                progressLabel.text = "Página ${displayPage + 1} de $dynamicPageCount aprox."
+            }
+        }
+    }
+
+    private fun progressionToDisplayPage(progression: Double): Int =
+        kotlin.math.round(progression.coerceIn(0.0, 1.0) * (dynamicPageCount - 1).coerceAtLeast(0)).toInt()
+
+    private fun displayPageForCurrentProgression(): Int = progressionToDisplayPage(
+        navigator.currentLocator.value.locations.totalProgression ?: document.progress.toDouble()
+    )
+
+    private fun displayPageToPositionIndex(displayPage: Int): Int {
+        if (pagePositions.size <= 1 || dynamicPageCount <= 1) return 0
+        val progression = displayPage.toDouble() / (dynamicPageCount - 1)
+        return kotlin.math.round(progression * pagePositions.lastIndex).toInt().coerceIn(pagePositions.indices)
+    }
+
+    private fun positionIndexToDisplayPage(positionIndex: Int): Int {
+        if (pagePositions.size <= 1 || dynamicPageCount <= 1) return 0
+        val progression = positionIndex.toDouble().coerceIn(0.0, pagePositions.lastIndex.toDouble()) / pagePositions.lastIndex
+        return progressionToDisplayPage(progression)
+    }
+
+    private fun navigateToDisplayPage(displayPage: Int, animated: Boolean = pageAnimationsEnabled()) {
+        if (!::navigator.isInitialized) return
+        val progression = if (dynamicPageCount <= 1) 0.0 else {
+            displayPage.toDouble().coerceIn(0.0, (dynamicPageCount - 1).toDouble()) / (dynamicPageCount - 1)
+        }
+        sliderNavigationJob?.cancel()
+        sliderNavigationJob = lifecycleScope.launch {
+            val locator = publication?.locateProgression(progression) ?: return@launch
+            navigator.go(locator, animated = animated && pageAnimationsEnabled())
         }
     }
 
@@ -588,12 +650,12 @@ class ReadiumEpubActivity : FragmentActivity() {
         val forwardPage = navigationHistory.nextPageIndex
         jumpBackButton.apply {
             visibility = if (backPage == null) View.INVISIBLE else View.VISIBLE
-            if (backPage != null) text = "Regresar a página ${backPage + 1}"
+            if (backPage != null) text = "Regresar a página ${positionIndexToDisplayPage(backPage) + 1}"
         }
         clearJumpHistoryButton.visibility = if (navigationHistory.hasNavigation) View.VISIBLE else View.GONE
         jumpForwardButton.apply {
             visibility = if (forwardPage == null) View.INVISIBLE else View.VISIBLE
-            if (forwardPage != null) text = "Avanzar a página ${forwardPage + 1}"
+            if (forwardPage != null) text = "Avanzar a página ${positionIndexToDisplayPage(forwardPage) + 1}"
         }
         pageJumpActions.visibility = if (navigationHistory.hasNavigation) View.VISIBLE else View.GONE
     }

@@ -89,6 +89,24 @@ class ReaderDatabaseTest {
     }
 
     @Test
+    fun completedStateIsRestoredFromNewerDriveState() {
+        val documentIdentifier = database.saveDocument("content://books/completed.epub", "completed.epub")
+        val remoteUpdatedAt = database.documentSyncMetadata(documentIdentifier).updatedAt + 10_000
+        database.mergeReadingState(listOf(documentIdentifier to JSONObject().apply {
+            put("updatedAt", remoteUpdatedAt)
+            put("completedAt", remoteUpdatedAt)
+            put("progress", 0.92)
+            put("readerLocation", 92)
+            put("lastOpenedAt", remoteUpdatedAt)
+            put("annotations", JSONArray())
+        }))
+
+        val restored = requireNotNull(database.findDocument(documentIdentifier))
+        assertEquals(remoteUpdatedAt, restored.completedAt)
+        assertEquals(documentIdentifier, database.findCompletedDocuments().single().identifier)
+    }
+
+    @Test
     fun resetBookIsNotUndoneByOlderRemoteState() {
         val documentIdentifier = database.saveDocument("content://books/reset-sync.epub", "reset-sync.epub")
         database.updateProgress(documentIdentifier, location = 220, progress = 0.55f)

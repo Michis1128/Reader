@@ -22,14 +22,35 @@ internal class LibraryDocumentActions(
         } else {
             "Reiniciar libro"
         }
+        val completionLabel = if (document.completedAt > 0L) "Marcar como no terminado" else "Marcar como terminado"
         AlertDialog.Builder(activity).setTitle(document.title)
-            .setItems(arrayOf("Editar metadatos", resetLabel, "Eliminar de la biblioteca")) { _, option ->
+            .setItems(arrayOf(completionLabel, "Editar metadatos", resetLabel, "Eliminar de la biblioteca")) { _, option ->
                 when (option) {
-                    0 -> editMetadata(document)
-                    1 -> confirmReset(document)
+                    0 -> toggleCompleted(document)
+                    1 -> editMetadata(document)
+                    2 -> confirmReset(document)
                     else -> confirmRemoval(document)
                 }
             }.show()
+    }
+
+    private fun toggleCompleted(document: LibraryDocument) {
+        val completed = document.completedAt <= 0L
+        if (database.setDocumentCompleted(document.identifier, completed) <= 0) {
+            message("No se pudo actualizar el estado del libro", true)
+            return
+        }
+        refreshLibrary()
+        enqueueBookStateSync(document.identifier)
+        message(if (completed) "Libro agregado a Terminados" else "Libro retirado de Terminados")
+    }
+
+    private fun enqueueBookStateSync(documentIdentifier: Long) {
+        val session = OptionalGoogleAccountManager(activity).currentSession() ?: return
+        if (!GoogleDriveAuthorizationManager(activity).isAuthorized()) return
+        if (GoogleDriveFolderRepository(activity).savedFolder(session.accountIdentifier) == null) return
+        AutomaticDriveSyncScheduler(activity).enqueueBookSync(documentIdentifier)
+        updateSyncStatus("Sincronización: estado de lectura pendiente de enviar a Drive")
     }
 
     private fun confirmReset(document: LibraryDocument) {

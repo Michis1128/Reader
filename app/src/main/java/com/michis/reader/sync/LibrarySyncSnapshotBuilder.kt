@@ -94,6 +94,7 @@ class LibrarySyncSnapshotBuilder(
                 .put("progress", document.progress.toDouble())
                 .put("readerLocation", database.readerLocation(document.identifier))
                 .put("lastOpenedAt", document.lastOpenedAt)
+                .put("completedAt", document.completedAt)
                 .put("annotations", annotationsJson)
                 .put("dictionaryCategories", categoriesJson)
                 .put("linkedDictionaryDocumentKeys", JSONArray(linkedDocumentKeys))

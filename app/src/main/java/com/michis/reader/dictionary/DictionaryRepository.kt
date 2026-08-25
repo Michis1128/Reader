@@ -152,7 +152,7 @@ internal class DictionaryRepository(private val database: SQLiteOpenHelper) {
     )
 
     fun documentsWithDictionaries(): List<LibraryDocument> = database.readableDatabase.rawQuery(
-        """SELECT DISTINCT d.identifier, d.uri, d.file_name, d.title, d.author, d.format, d.progress, d.last_opened_at
+        """SELECT DISTINCT d.identifier, d.uri, d.file_name, d.title, d.author, d.format, d.progress, d.last_opened_at, d.completed_at
            FROM documents d INNER JOIN dictionary_categories c ON c.document_identifier = d.identifier
            ORDER BY d.title COLLATE NOCASE""",
         null
@@ -161,7 +161,7 @@ internal class DictionaryRepository(private val database: SQLiteOpenHelper) {
             while (cursor.moveToNext()) add(
                 LibraryDocument(
                     cursor.getLong(0), cursor.getString(1), cursor.getString(2), cursor.getString(3),
-                    cursor.getString(4), cursor.getString(5), cursor.getFloat(6), cursor.getLong(7)
+                    cursor.getString(4), cursor.getString(5), cursor.getFloat(6), cursor.getLong(7), cursor.getLong(8)
                 )
             )
             }
