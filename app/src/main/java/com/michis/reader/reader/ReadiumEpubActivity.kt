@@ -366,7 +366,9 @@ class ReadiumEpubActivity : FragmentActivity() {
                         appearanceController.prepareLoadedPage()
                     }
                 },
-                configuration = EpubNavigatorFragment.Configuration(selectionActionModeCallback = selectionActions())
+                configuration = EpubNavigatorFragment.Configuration(
+                    selectionActionModeCallback = selectionActions()
+                ).also(EpubFontCatalog::configure)
             )
             supportFragmentManager.commitNow {
                 replace(screenBinding.navigatorContainer.id, EpubNavigatorFragment::class.java, null, NAVIGATOR_TAG)

@@ -16,7 +16,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
 import org.readium.r2.navigator.preferences.ColumnCount
-import org.readium.r2.navigator.preferences.FontFamily
 import org.readium.r2.navigator.preferences.Spread
 import org.readium.r2.navigator.preferences.TextAlign
 import org.readium.r2.navigator.preferences.Theme
@@ -45,7 +44,7 @@ internal class EpubAppearanceController(
         val twoPages = settings.twoPagesLandscape(
             activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         )
-        val fontFamily = FONT_FAMILIES[settings.fontFamilyIndex.coerceIn(FONT_FAMILIES.indices)]
+        val fontFamily = EpubFontCatalog.family(settings.fontFamilyIndex)
         activity.requestedOrientation = when (settings.readerOrientation) {
             1 -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             2 -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -136,9 +135,9 @@ internal class EpubAppearanceController(
     }
 
     fun showFontSelection() {
-        AlertDialog.Builder(activity).setTitle("Tipo de fuente").setItems(FONT_NAMES) { _, index ->
+        AlertDialog.Builder(activity).setTitle("Tipo de fuente").setItems(EpubFontCatalog.names) { _, index ->
             settings.fontFamilyIndex = index
-            submit(EpubPreferences(fontFamily = FONT_FAMILIES[index]))
+            submit(EpubPreferences(fontFamily = EpubFontCatalog.family(index)))
         }.show()
     }
 
@@ -179,13 +178,6 @@ internal class EpubAppearanceController(
     private companion object {
         const val NAVIGATOR_RETRY_DELAY_MILLIS = 16L
         const val PRESENTATION_SETTLE_DELAY_MILLIS = 48L
-        val FONT_NAMES = arrayOf(
-            "Sans Serif", "Serif", "Cursiva", "Monoespaciada", "OpenDyslexic", "Accessible DfA", "iA Writer Duospace"
-        )
-        val FONT_FAMILIES = arrayOf(
-            FontFamily.SANS_SERIF, FontFamily.SERIF, FontFamily.CURSIVE, FontFamily.MONOSPACE,
-            FontFamily.OPEN_DYSLEXIC, FontFamily.ACCESSIBLE_DFA, FontFamily.IA_WRITER_DUOSPACE
-        )
         val TEXT_ALIGNMENTS = arrayOf(TextAlign.JUSTIFY, TextAlign.START, TextAlign.CENTER, TextAlign.END)
     }
 }
