@@ -12,6 +12,7 @@ import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.input.HardwareInputDispatcher
 import com.michis.reader.input.ReaderHardwareAction
+import com.michis.reader.input.ReaderHardwareInputPreferences
 import com.michis.reader.input.ReaderHardwareKeyMapper
 import com.michis.reader.settings.*
 import com.michis.reader.theme.*
@@ -97,7 +98,8 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var dynamicPageCount = 1
     private var sliderNavigationJob: Job? = null
     private var publication: Publication? = null
-    private val hardwareInputDispatcher = HardwareInputDispatcher()
+    private val hardwareInputDispatcher = HardwareInputDispatcher(::handleHardwareInput)
+    private val hardwareInputPreferences by lazy { ReaderHardwareInputPreferences(readerSettings.preferences) }
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -129,7 +131,6 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         )
         setContentView(buildScreen())
-        observeHardwareInput()
         appearanceController.applyInitialTheme()
         configureReaderScreenTimeout()
         openWithReadium()
@@ -650,25 +651,40 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun pageAnimationsEnabled(): Boolean =
         readerSettings.pageTurnAnimations
 
-    private fun observeHardwareInput() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                hardwareInputDispatcher.actions.collect { action ->
-                    if (!::navigator.isInitialized) return@collect
-                    when (action) {
-                        ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
-                        ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
-                    }
-                }
+    private fun handleHardwareInput(action: ReaderHardwareAction) {
+        if (!::navigator.isInitialized) return
+        when (action) {
+            ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
+            ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
+            ReaderHardwareAction.INCREASE_TEXT_SIZE -> changeTextSize(1f)
+            ReaderHardwareAction.DECREASE_TEXT_SIZE -> changeTextSize(-1f)
+            ReaderHardwareAction.TOGGLE_READING_THEME -> {
+                activeQuickMode = 1 - activeQuickMode
+                appearanceController.applyQuickMode(activeQuickMode)
             }
+            ReaderHardwareAction.TOGGLE_BOOKMARK -> saveCurrentBookmark()
+            ReaderHardwareAction.NONE -> Unit
         }
+        configureReaderScreenTimeout()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val action = ReaderHardwareKeyMapper.actionFor(keyCode, event)
-            ?: return super.onKeyDown(keyCode, event)
-        hardwareInputDispatcher.dispatch(action)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!ReaderHardwareKeyMapper.supports(event.keyCode)) return super.dispatchKeyEvent(event)
+
+        ReaderHardwareKeyMapper.controlFor(event.keyCode, event)?.let { control ->
+            hardwareInputDispatcher.dispatch(hardwareInputPreferences.actionFor(control))
+        }
         return true
+    }
+
+    private fun changeTextSize(change: Float) {
+        val size = (readerSettings.fontSizeDp + change).coerceIn(
+            ReaderSettingsRepository.MINIMUM_FONT_SIZE_DP,
+            ReaderSettingsRepository.MAXIMUM_FONT_SIZE_DP
+        )
+        readerSettings.fontSizeDp = size
+        appearanceController.submit(EpubPreferences(fontSize = size / 16.0))
+        Toast.makeText(this, "Texto: ${size.toInt()} dp", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveCurrentBookmark() {

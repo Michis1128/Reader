@@ -13,4 +13,8 @@
     <string name="spen_actions">Controles de lectura</string>
     <string name="spen_next_page">Página siguiente</string>
     <string name="spen_previous_page">Página anterior</string>
+    <string name="spen_increase_text">Aumentar texto</string>
+    <string name="spen_decrease_text">Reducir texto</string>
+    <string name="spen_change_theme">Cambiar tema</string>
+    <string name="spen_toggle_bookmark">Agregar o quitar marcador</string>
 </resources>
