@@ -157,6 +157,15 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Un toque breve sobre un término resaltado abre directamente su entrada en Diccionario; no usar popup contextual ni exigir pulsación prolongada.
 - Si se cambia una entrada, categoría o vínculo, conservar la lógica de sincronización y el refresco de decoraciones.
 
+### Controles de hardware y Air Actions
+
+- El soporte de Air Actions usa exclusivamente el contrato `REMOTE_ACTION`, `res/xml/remote_actions.xml` y los `KeyEvent` generados por el sistema.
+- No agregar el Samsung S Pen Remote SDK ni comprobaciones de fabricante, Bluetooth, sensores o reconocimiento manual de gestos.
+- `ReaderHardwareKeyMapper` traduce únicamente eventos iniciales, sin repetición, de `PAGE_DOWN` y `PAGE_UP`.
+- `HardwareInputDispatcher` debe permanecer genérico y desacoplado de Samsung y Readium.
+- La actividad del lector consume las acciones y reutiliza `navigateOnePage`; no dupliques la navegación.
+- Los eventos no deben producir acciones fuera de `ReadiumEpubActivity`.
+
 ## 5. Invariantes de datos y sincronización
 
 Esta es la zona de mayor riesgo.

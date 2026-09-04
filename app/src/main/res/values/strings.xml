@@ -10,4 +10,7 @@
     <string name="dictionaries_title">Diccionarios</string>
     <string name="reset_books_title">Reiniciar libros</string>
     <string name="google_web_client_id">33987563321-0dbosimmoopurmg093nbi3tdbk80mgru.apps.googleusercontent.com</string>
+    <string name="spen_actions">Controles de lectura</string>
+    <string name="spen_next_page">Página siguiente</string>
+    <string name="spen_previous_page">Página anterior</string>
 </resources>

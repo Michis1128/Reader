@@ -10,6 +10,9 @@ import com.michis.reader.databinding.ViewEpubBottomControlsBinding
 import com.michis.reader.databinding.ViewEpubTopControlsBinding
 import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
+import com.michis.reader.input.HardwareInputDispatcher
+import com.michis.reader.input.ReaderHardwareAction
+import com.michis.reader.input.ReaderHardwareKeyMapper
 import com.michis.reader.settings.*
 import com.michis.reader.theme.*
 
@@ -94,6 +97,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var dynamicPageCount = 1
     private var sliderNavigationJob: Job? = null
     private var publication: Publication? = null
+    private val hardwareInputDispatcher = HardwareInputDispatcher()
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -125,6 +129,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         )
         setContentView(buildScreen())
+        observeHardwareInput()
         appearanceController.applyInitialTheme()
         configureReaderScreenTimeout()
         openWithReadium()
@@ -644,6 +649,27 @@ class ReadiumEpubActivity : FragmentActivity() {
 
     private fun pageAnimationsEnabled(): Boolean =
         readerSettings.pageTurnAnimations
+
+    private fun observeHardwareInput() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                hardwareInputDispatcher.actions.collect { action ->
+                    if (!::navigator.isInitialized) return@collect
+                    when (action) {
+                        ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
+                        ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val action = ReaderHardwareKeyMapper.actionFor(keyCode, event)
+            ?: return super.onKeyDown(keyCode, event)
+        hardwareInputDispatcher.dispatch(action)
+        return true
+    }
 
     private fun saveCurrentBookmark() {
         if (!::navigator.isInitialized) return
