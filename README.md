@@ -44,10 +44,6 @@ Michis Reader funciona de forma local y utiliza [Readium Kotlin Toolkit](https:/
 
 La app sigue siendo plenamente utilizable sin iniciar sesión y sin conexión. Los documentos locales no se envían a servicios del desarrollador.
 
-### S Pen
-
-En dispositivos Samsung compatibles, las acciones aéreas del S Pen pueden asignarse a tareas como cambiar de página, alternar el tema, modificar el tamaño del texto, crear un marcador o guardar una selección como cita o término de diccionario.
-
 ## Alcance
 
 Michis Reader está dedicado exclusivamente a la lectura de EPUB. No incorpora lectores de PDF, DOCX, MOBI u otros formatos, ni funciones de texto a voz.
@@ -106,6 +102,6 @@ El proyecto contiene un único módulo Android, `app`. Sus áreas principales so
 - `annotations` y `dictionary`: citas, marcadores y diccionarios.
 - `data`: base de datos y persistencia.
 - `sync` y `sync.drive`: sincronización incremental y conexión opcional con Google Drive.
-- `settings`, `theme`, `spen` y `ui`: preferencias y componentes compartidos.
+- `settings`, `theme` y `ui`: preferencias y componentes compartidos.
 
 Antes de contribuir, consulta [`AGENTS.md`](AGENTS.md), que documenta la arquitectura, los comportamientos que deben conservarse y la validación esperada para los cambios.

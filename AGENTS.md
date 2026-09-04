@@ -157,14 +157,6 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Un toque breve sobre un término resaltado abre directamente su entrada en Diccionario; no usar popup contextual ni exigir pulsación prolongada.
 - Si se cambia una entrada, categoría o vínculo, conservar la lógica de sincronización y el refresco de decoraciones.
 
-### S Pen
-
-- Las acciones aéreas solo deben ejecutarse con el botón del S Pen presionado.
-- `SpenRemoteController` necesita un contexto de Activity; no sustituirlo por `applicationContext`.
-- `SpenReaderActionController` resuelve teclas y preferencias hacia acciones del lector; no vuelvas a codificar el mapeo dentro de `ReadiumEpubActivity`.
-- Mantener el `intent-filter`, `meta-data` y `res/xml/spen_remote_actions.xml` del manifest.
-- Los mapeos son configurables y deben poder restaurarse a sus valores predeterminados.
-
 ## 5. Invariantes de datos y sincronización
 
 Esta es la zona de mayor riesgo.

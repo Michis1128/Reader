@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-feature android:name="com.sec.feature.spen_usp" android:required="false" />
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -9,12 +8,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/AppTheme"
         android:supportsRtl="true">
-        <activity android:name=".reader.ReadiumEpubActivity" android:screenOrientation="unspecified" android:exported="true">
-            <intent-filter>
-                <action android:name="com.samsung.android.support.REMOTE_ACTION" />
-            </intent-filter>
-            <meta-data android:name="com.samsung.android.support.REMOTE_ACTION" android:resource="@xml/spen_remote_actions" />
-        </activity>
+        <activity android:name=".reader.ReadiumEpubActivity" android:screenOrientation="unspecified" android:exported="false" />
         <activity android:name=".settings.SettingsActivity" />
         <activity android:name=".sync.drive.DriveLibraryPickerActivity" />
         <activity android:name=".settings.ResetBooksActivity" />

@@ -40,7 +40,6 @@ dependencies {
     add("implementation", "com.google.android.libraries.identity.googleid:googleid:1.2.0")
     add("implementation", "com.google.android.gms:play-services-auth:21.6.0")
     add("implementation", "androidx.work:work-runtime-ktx:2.11.2")
-    add("implementation", fileTree("libs") { include("*.jar") })
     add("implementation", "org.readium.kotlin-toolkit:readium-shared:3.2.0")
     add("implementation", "org.readium.kotlin-toolkit:readium-streamer:3.2.0")
     add("implementation", "org.readium.kotlin-toolkit:readium-navigator:3.2.0")
