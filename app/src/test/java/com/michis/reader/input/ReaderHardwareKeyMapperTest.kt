@@ -2,7 +2,9 @@ package com.michis.reader.input
 
 import android.view.KeyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -39,5 +41,13 @@ class ReaderHardwareKeyMapperTest {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_UP)
 
         assertNull(ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
+    }
+
+    @Test
+    fun supportedKeysAreConsumedEvenWhenEventMustNotExecute() {
+        assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_SPACE))
+        assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_PAGE_DOWN))
+        assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_PLUS))
+        assertFalse(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_VOLUME_UP))
     }
 }

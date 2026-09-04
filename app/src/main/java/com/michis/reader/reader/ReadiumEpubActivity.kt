@@ -98,7 +98,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var dynamicPageCount = 1
     private var sliderNavigationJob: Job? = null
     private var publication: Publication? = null
-    private val hardwareInputDispatcher = HardwareInputDispatcher()
+    private val hardwareInputDispatcher = HardwareInputDispatcher(::handleHardwareInput)
     private val hardwareInputPreferences by lazy { ReaderHardwareInputPreferences(readerSettings.preferences) }
 
     private val quotesLauncher = registerForActivityResult(
@@ -131,7 +131,6 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         )
         setContentView(buildScreen())
-        observeHardwareInput()
         appearanceController.applyInitialTheme()
         configureReaderScreenTimeout()
         openWithReadium()
@@ -652,34 +651,29 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun pageAnimationsEnabled(): Boolean =
         readerSettings.pageTurnAnimations
 
-    private fun observeHardwareInput() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                hardwareInputDispatcher.actions.collect { action ->
-                    if (!::navigator.isInitialized) return@collect
-                    when (action) {
-                        ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
-                        ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
-                        ReaderHardwareAction.INCREASE_TEXT_SIZE -> changeTextSize(1f)
-                        ReaderHardwareAction.DECREASE_TEXT_SIZE -> changeTextSize(-1f)
-                        ReaderHardwareAction.TOGGLE_READING_THEME -> {
-                            activeQuickMode = 1 - activeQuickMode
-                            appearanceController.applyQuickMode(activeQuickMode)
-                        }
-                        ReaderHardwareAction.TOGGLE_BOOKMARK -> saveCurrentBookmark()
-                        ReaderHardwareAction.NONE -> Unit
-                    }
-                    configureReaderScreenTimeout()
-                }
+    private fun handleHardwareInput(action: ReaderHardwareAction) {
+        if (!::navigator.isInitialized) return
+        when (action) {
+            ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
+            ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
+            ReaderHardwareAction.INCREASE_TEXT_SIZE -> changeTextSize(1f)
+            ReaderHardwareAction.DECREASE_TEXT_SIZE -> changeTextSize(-1f)
+            ReaderHardwareAction.TOGGLE_READING_THEME -> {
+                activeQuickMode = 1 - activeQuickMode
+                appearanceController.applyQuickMode(activeQuickMode)
             }
+            ReaderHardwareAction.TOGGLE_BOOKMARK -> saveCurrentBookmark()
+            ReaderHardwareAction.NONE -> Unit
         }
+        configureReaderScreenTimeout()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val control = ReaderHardwareKeyMapper.controlFor(keyCode, event)
-            ?: return super.onKeyDown(keyCode, event)
-        val action = hardwareInputPreferences.actionFor(control)
-        hardwareInputDispatcher.dispatch(action)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!ReaderHardwareKeyMapper.supports(event.keyCode)) return super.dispatchKeyEvent(event)
+
+        ReaderHardwareKeyMapper.controlFor(event.keyCode, event)?.let { control ->
+            hardwareInputDispatcher.dispatch(hardwareInputPreferences.actionFor(control))
+        }
         return true
     }
 
