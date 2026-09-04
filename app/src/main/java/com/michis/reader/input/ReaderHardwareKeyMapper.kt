@@ -11,7 +11,11 @@ object ReaderHardwareKeyMapper {
         KeyEvent.KEYCODE_PAGE_UP,
         KeyEvent.KEYCODE_PAGE_DOWN,
         KeyEvent.KEYCODE_MINUS,
-        KeyEvent.KEYCODE_PLUS
+        KeyEvent.KEYCODE_PLUS,
+        // Samsung Air Command can retain trigger keys from a previously
+        // registered RemoteActions definition after the app is updated.
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+        KeyEvent.KEYCODE_B
     )
 
     fun supports(keyCode: Int): Boolean = keyCode in supportedKeyCodes
@@ -22,6 +26,8 @@ object ReaderHardwareKeyMapper {
         return when (keyCode) {
             KeyEvent.KEYCODE_PAGE_DOWN -> ReaderHardwareControl.BUTTON_CLICK
             KeyEvent.KEYCODE_PAGE_UP -> ReaderHardwareControl.BUTTON_DOUBLE_CLICK
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> ReaderHardwareControl.BUTTON_CLICK
+            KeyEvent.KEYCODE_B -> ReaderHardwareControl.BUTTON_DOUBLE_CLICK
             KeyEvent.KEYCODE_DPAD_UP -> ReaderHardwareControl.SWIPE_UP
             KeyEvent.KEYCODE_DPAD_DOWN -> ReaderHardwareControl.SWIPE_DOWN
             KeyEvent.KEYCODE_DPAD_LEFT -> ReaderHardwareControl.SWIPE_LEFT

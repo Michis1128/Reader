@@ -50,4 +50,19 @@ class ReaderHardwareKeyMapperTest {
         assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_PLUS))
         assertFalse(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_VOLUME_UP))
     }
+
+    @Test
+    fun cachedSamsungButtonKeysRemainCompatible() {
+        val singleClick = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+        val doubleClick = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_B)
+
+        assertEquals(
+            ReaderHardwareControl.BUTTON_CLICK,
+            ReaderHardwareKeyMapper.controlFor(singleClick.keyCode, singleClick)
+        )
+        assertEquals(
+            ReaderHardwareControl.BUTTON_DOUBLE_CLICK,
+            ReaderHardwareKeyMapper.controlFor(doubleClick.keyCode, doubleClick)
+        )
+    }
 }
