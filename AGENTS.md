@@ -161,8 +161,9 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 
 - El soporte de Air Actions usa exclusivamente el contrato `REMOTE_ACTION`, `res/xml/remote_actions.xml` y los `KeyEvent` generados por el sistema.
 - No agregar el Samsung S Pen Remote SDK ni comprobaciones de fabricante, Bluetooth, sensores o reconocimiento manual de gestos.
-- `ReaderHardwareKeyMapper` traduce únicamente eventos iniciales, sin repetición, de `PAGE_DOWN` y `PAGE_UP`.
+- `ReaderHardwareKeyMapper` traduce únicamente eventos iniciales y sin repetición de las ocho teclas declaradas por RemoteActions.
 - `HardwareInputDispatcher` debe permanecer genérico y desacoplado de Samsung y Readium.
+- `ReaderHardwareInputPreferences` conserva el mapeo configurable y sus valores predeterminados; Ajustes debe permitir restaurarlos.
 - La actividad del lector consume las acciones y reutiliza `navigateOnePage`; no dupliques la navegación.
 - Los eventos no deben producir acciones fuera de `ReadiumEpubActivity`.
 

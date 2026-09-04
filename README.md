@@ -46,7 +46,7 @@ La app sigue siendo plenamente utilizable sin iniciar sesión y sin conexión. L
 
 ### Controles de hardware
 
-Dentro del lector, las teclas `PAGE_DOWN` y `PAGE_UP` permiten avanzar y retroceder. En dispositivos Samsung compatibles, RemoteActions puede traducir el botón y los gestos aéreos del S Pen a esas mismas teclas sin integrar el SDK propietario.
+Dentro del lector, RemoteActions permite usar el botón y los ocho gestos aéreos del S Pen sin integrar el SDK propietario. Por defecto se puede avanzar, retroceder, cambiar el tamaño del texto, alternar el tema y agregar o quitar un marcador. Cada control puede reasignarse desde Configuración y las teclas `PAGE_DOWN` y `PAGE_UP` siguen siendo compatibles con controles de hardware genéricos.
 
 ## Alcance
 

@@ -12,6 +12,7 @@ import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
 import com.michis.reader.input.HardwareInputDispatcher
 import com.michis.reader.input.ReaderHardwareAction
+import com.michis.reader.input.ReaderHardwareInputPreferences
 import com.michis.reader.input.ReaderHardwareKeyMapper
 import com.michis.reader.settings.*
 import com.michis.reader.theme.*
@@ -98,6 +99,7 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var sliderNavigationJob: Job? = null
     private var publication: Publication? = null
     private val hardwareInputDispatcher = HardwareInputDispatcher()
+    private val hardwareInputPreferences by lazy { ReaderHardwareInputPreferences(readerSettings.preferences) }
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -658,17 +660,37 @@ class ReadiumEpubActivity : FragmentActivity() {
                     when (action) {
                         ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
                         ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
+                        ReaderHardwareAction.INCREASE_TEXT_SIZE -> changeTextSize(1f)
+                        ReaderHardwareAction.DECREASE_TEXT_SIZE -> changeTextSize(-1f)
+                        ReaderHardwareAction.TOGGLE_READING_THEME -> {
+                            activeQuickMode = 1 - activeQuickMode
+                            appearanceController.applyQuickMode(activeQuickMode)
+                        }
+                        ReaderHardwareAction.TOGGLE_BOOKMARK -> saveCurrentBookmark()
+                        ReaderHardwareAction.NONE -> Unit
                     }
+                    configureReaderScreenTimeout()
                 }
             }
         }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val action = ReaderHardwareKeyMapper.actionFor(keyCode, event)
+        val control = ReaderHardwareKeyMapper.controlFor(keyCode, event)
             ?: return super.onKeyDown(keyCode, event)
+        val action = hardwareInputPreferences.actionFor(control)
         hardwareInputDispatcher.dispatch(action)
         return true
+    }
+
+    private fun changeTextSize(change: Float) {
+        val size = (readerSettings.fontSizeDp + change).coerceIn(
+            ReaderSettingsRepository.MINIMUM_FONT_SIZE_DP,
+            ReaderSettingsRepository.MAXIMUM_FONT_SIZE_DP
+        )
+        readerSettings.fontSizeDp = size
+        appearanceController.submit(EpubPreferences(fontSize = size / 16.0))
+        Toast.makeText(this, "Texto: ${size.toInt()} dp", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveCurrentBookmark() {

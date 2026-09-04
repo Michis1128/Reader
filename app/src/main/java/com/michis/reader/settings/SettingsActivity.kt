@@ -9,6 +9,8 @@ import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.databinding.ViewSettingsToggleBinding
 import com.michis.reader.databinding.ViewVerticalContainerBinding
+import com.michis.reader.input.ReaderHardwareControl
+import com.michis.reader.input.ReaderHardwareInputPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
@@ -34,6 +36,7 @@ class SettingsActivity : ComponentActivity() {
         }
     }
     private val readingModes = ReadingThemePalette.names
+    private val hardwareInputPreferences by lazy { ReaderHardwareInputPreferences(readerSettings.preferences) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +96,19 @@ class SettingsActivity : ComponentActivity() {
             addView(settingsToggle("Permitir marcador tocando la esquina") {
                 isChecked = readerSettings.cornerBookmarkEnabled
                 setOnCheckedChangeListener { _, checked -> readerSettings.cornerBookmarkEnabled = checked }
+            })
+        })
+        addView(settingsSection("Controles aéreos y de hardware") {
+            addView(description("Personaliza las acciones recibidas del botón y los gestos aéreos. También se aplican a controles que envíen las mismas teclas."))
+            ReaderHardwareControl.entries.forEach { control ->
+                addView(settingsField(control.displayName, hardwareActionSpinner(control)))
+            }
+            addView(settingsAction("Restaurar controles predeterminados") {
+                setOnClickListener {
+                    hardwareInputPreferences.restoreDefaults()
+                    Toast.makeText(context, "Controles restaurados", Toast.LENGTH_SHORT).show()
+                    recreate()
+                }
             })
         })
         addView(settingsSection("Almacenamiento y privacidad") {
@@ -166,6 +182,20 @@ class SettingsActivity : ComponentActivity() {
         if (!stored.startsWith("theme:")) return stored
         val background = ReadingThemePalette.colors(stored.removePrefix("theme:")).first
         return if (androidx.core.graphics.ColorUtils.calculateLuminance(background) < .45) "dark" else "light"
+    }
+
+    private fun hardwareActionSpinner(control: ReaderHardwareControl) = LimitedHeightSpinner(this).apply {
+        val options = ReaderHardwareInputPreferences.actionOptions
+        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, options.map { it.second })
+        val selectedAction = hardwareInputPreferences.actionFor(control)
+        setSelection(options.indexOfFirst { it.first == selectedAction }.coerceAtLeast(0))
+        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                hardwareInputPreferences.setAction(control, options[position].first)
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
     }
 
     private fun hexColorEditor(preferenceKey: String, defaultColor: String): View {

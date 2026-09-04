@@ -12,17 +12,17 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class ReaderHardwareKeyMapperTest {
     @Test
-    fun pageDownStartsNextPageAction() {
+    fun pageDownIdentifiesSwipeRight() {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_DOWN)
 
-        assertEquals(ReaderHardwareAction.NEXT_PAGE, ReaderHardwareKeyMapper.actionFor(event.keyCode, event))
+        assertEquals(ReaderHardwareControl.SWIPE_RIGHT, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
     }
 
     @Test
-    fun pageUpStartsPreviousPageAction() {
+    fun pageUpIdentifiesSwipeLeft() {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_UP)
 
-        assertEquals(ReaderHardwareAction.PREVIOUS_PAGE, ReaderHardwareKeyMapper.actionFor(event.keyCode, event))
+        assertEquals(ReaderHardwareControl.SWIPE_LEFT, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
     }
 
     @Test
@@ -30,14 +30,14 @@ class ReaderHardwareKeyMapperTest {
         val repeated = KeyEvent(0L, 0L, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_DOWN, 1)
         val released = KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_PAGE_DOWN)
 
-        assertNull(ReaderHardwareKeyMapper.actionFor(repeated.keyCode, repeated))
-        assertNull(ReaderHardwareKeyMapper.actionFor(released.keyCode, released))
+        assertNull(ReaderHardwareKeyMapper.controlFor(repeated.keyCode, repeated))
+        assertNull(ReaderHardwareKeyMapper.controlFor(released.keyCode, released))
     }
 
     @Test
     fun unrelatedKeysAreIgnored() {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_VOLUME_UP)
 
-        assertNull(ReaderHardwareKeyMapper.actionFor(event.keyCode, event))
+        assertNull(ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
     }
 }
