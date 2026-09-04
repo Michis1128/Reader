@@ -9,7 +9,6 @@ import com.michis.reader.databinding.ViewActionButtonBinding
 import com.michis.reader.databinding.ViewSettingsDescriptionBinding
 import com.michis.reader.databinding.ViewSettingsToggleBinding
 import com.michis.reader.databinding.ViewVerticalContainerBinding
-import com.michis.reader.spen.SpenControlPreferences
 import com.michis.reader.sync.drive.GoogleDriveAuthorizationManager
 import com.michis.reader.theme.*
 import com.michis.reader.ui.LimitedHeightSpinner
@@ -20,14 +19,11 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.content.Intent
 import android.os.Bundle
-import android.os.Build
 import android.text.InputFilter
 import android.text.InputType
 import android.view.View
 import android.widget.*
 import androidx.activity.ComponentActivity
-import com.samsung.android.sdk.penremote.SpenRemote
-import com.samsung.android.sdk.penremote.SpenUnitManager
 
 class SettingsActivity : ComponentActivity() {
     private val readerSettings by lazy { ReaderSettingsRepository.get(this) }
@@ -98,20 +94,6 @@ class SettingsActivity : ComponentActivity() {
                 isChecked = readerSettings.cornerBookmarkEnabled
                 setOnCheckedChangeListener { _, checked -> readerSettings.cornerBookmarkEnabled = checked }
             })
-        })
-        addView(settingsSection("Comandos aéreos del S Pen") {
-            addView(description("Los gestos solo se reconocen mientras mantienes presionado el botón del S Pen."))
-            SpenControlPreferences.gestures.forEach { gesture ->
-                addView(settingsField(gesture.label, spenActionSpinner(gesture)))
-            }
-            addView(settingsAction("Restaurar comandos predeterminados") {
-                setOnClickListener { restoreDefaultSpenActions(); Toast.makeText(context, "Comandos restaurados", Toast.LENGTH_SHORT).show(); recreate() }
-            })
-            val result = description("Diagnóstico todavía no ejecutado")
-            addView(settingsAction("Comprobar compatibilidad del S Pen") {
-                setOnClickListener { diagnoseSpen(result) }
-            })
-            addView(result)
         })
         addView(settingsSection("Almacenamiento y privacidad") {
             addView(settingsAction("Reiniciar libros…") {
@@ -185,52 +167,6 @@ class SettingsActivity : ComponentActivity() {
         val background = ReadingThemePalette.colors(stored.removePrefix("theme:")).first
         return if (androidx.core.graphics.ColorUtils.calculateLuminance(background) < .45) "dark" else "light"
     }
-
-    private fun spenActionSpinner(gesture: SpenControlPreferences.Gesture) = LimitedHeightSpinner(this).apply {
-        val preferences = readerSettings.preferences
-        adapter = ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, SpenControlPreferences.actionLabels)
-        val selectedValue = preferences.getString(gesture.preferenceKey, gesture.defaultAction)
-        setSelection(SpenControlPreferences.actionValues.indexOf(selectedValue).coerceAtLeast(0))
-        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                preferences.edit().putString(gesture.preferenceKey, SpenControlPreferences.actionValues[position]).apply()
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-    }
-
-    private fun restoreDefaultSpenActions() {
-        val editor = readerSettings.preferences.edit()
-        SpenControlPreferences.gestures.forEach { editor.putString(it.preferenceKey, it.defaultAction) }
-        editor.apply()
-    }
-
-    private fun diagnoseSpen(result: TextView) {
-        val remote = SpenRemote.getInstance()
-        val device = "${Build.MANUFACTURER} ${Build.MODEL}"
-        val buttonAvailable = runCatching { remote.isFeatureEnabled(SpenRemote.FEATURE_TYPE_BUTTON) }.getOrDefault(false)
-        val motionAvailable = runCatching { remote.isFeatureEnabled(SpenRemote.FEATURE_TYPE_AIR_MOTION) }.getOrDefault(false)
-        result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConectando…"
-        if (!buttonAvailable && !motionAvailable) {
-            result.append("\nEl dispositivo o el S Pen no ofrece funciones remotas BLE."); return
-        }
-        runCatching {
-            if (remote.isConnected) remote.disconnect(this@SettingsActivity)
-            remote.connect(this@SettingsActivity, object : SpenRemote.ConnectionResultCallback {
-                override fun onSuccess(manager: SpenUnitManager) {
-                    runOnUiThread {
-                        result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión al framework: Correcta"
-                        runCatching { remote.disconnect(this@SettingsActivity) }
-                    }
-                }
-                override fun onFailure(error: Int) { runOnUiThread {
-                    result.text = "$device\nBotón remoto: ${yesNo(buttonAvailable)}\nMovimiento aéreo: ${yesNo(motionAvailable)}\nConexión rechazada. Código: $error"
-                } }
-            })
-        }.onFailure { result.append("\nError: ${it.javaClass.simpleName}: ${it.message.orEmpty()}") }
-    }
-
-    private fun yesNo(value: Boolean) = if (value) "Disponible" else "No disponible"
 
     private fun hexColorEditor(preferenceKey: String, defaultColor: String): View {
         val preferences = readerSettings.preferences

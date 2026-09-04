@@ -157,13 +157,14 @@ Aunque Compose está habilitado en Gradle, la interfaz vigente usa XML y View Bi
 - Un toque breve sobre un término resaltado abre directamente su entrada en Diccionario; no usar popup contextual ni exigir pulsación prolongada.
 - Si se cambia una entrada, categoría o vínculo, conservar la lógica de sincronización y el refresco de decoraciones.
 
-### S Pen
+### Controles de hardware y Air Actions
 
-- Las acciones aéreas solo deben ejecutarse con el botón del S Pen presionado.
-- `SpenRemoteController` necesita un contexto de Activity; no sustituirlo por `applicationContext`.
-- `SpenReaderActionController` resuelve teclas y preferencias hacia acciones del lector; no vuelvas a codificar el mapeo dentro de `ReadiumEpubActivity`.
-- Mantener el `intent-filter`, `meta-data` y `res/xml/spen_remote_actions.xml` del manifest.
-- Los mapeos son configurables y deben poder restaurarse a sus valores predeterminados.
+- El soporte de Air Actions usa exclusivamente el contrato `REMOTE_ACTION`, `res/xml/remote_actions.xml` y los `KeyEvent` generados por el sistema.
+- No agregar el Samsung S Pen Remote SDK ni comprobaciones de fabricante, Bluetooth, sensores o reconocimiento manual de gestos.
+- `ReaderHardwareKeyMapper` traduce únicamente eventos iniciales, sin repetición, de `PAGE_DOWN` y `PAGE_UP`.
+- `HardwareInputDispatcher` debe permanecer genérico y desacoplado de Samsung y Readium.
+- La actividad del lector consume las acciones y reutiliza `navigateOnePage`; no dupliques la navegación.
+- Los eventos no deben producir acciones fuera de `ReadiumEpubActivity`.
 
 ## 5. Invariantes de datos y sincronización
 

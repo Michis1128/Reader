@@ -10,8 +10,10 @@ import com.michis.reader.databinding.ViewEpubBottomControlsBinding
 import com.michis.reader.databinding.ViewEpubTopControlsBinding
 import com.michis.reader.databinding.ViewEpubSearchPanelBinding
 import com.michis.reader.dictionary.DictionaryActivity
+import com.michis.reader.input.HardwareInputDispatcher
+import com.michis.reader.input.ReaderHardwareAction
+import com.michis.reader.input.ReaderHardwareKeyMapper
 import com.michis.reader.settings.*
-import com.michis.reader.spen.*
 import com.michis.reader.theme.*
 
 import android.app.AlertDialog
@@ -89,14 +91,13 @@ class ReadiumEpubActivity : FragmentActivity() {
     private var lastBookmarkActionAt = 0L
     private val navigationHistory = ReaderNavigationHistory()
     private var sliderJumpOriginPage: Int? = null
-    private lateinit var spenRemoteController: SpenRemoteController
-    private lateinit var spenActionController: SpenReaderActionController
     private val pendingExtendedQuoteParts = mutableListOf<ExtendedQuotePart>()
     private var sessionController: ReaderSessionController? = null
     private var pagePositions = emptyList<org.readium.r2.shared.publication.Locator>()
     private var dynamicPageCount = 1
     private var sliderNavigationJob: Job? = null
     private var publication: Publication? = null
+    private val hardwareInputDispatcher = HardwareInputDispatcher()
 
     private val quotesLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -112,25 +113,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         database = ReaderDatabase.getInstance(this)
         document = database.findDocument(intent.getLongExtra("document_identifier", -1)) ?: run { finish(); return }
         sessionController = ReaderSessionController(this, database, document)
-        spenActionController = SpenReaderActionController(
-            readerSettings,
-            SpenReaderActionController.Actions(
-                nextPage = { navigateOnePage(1) },
-                previousPage = { navigateOnePage(-1) },
-                toggleControls = ::toggleControls,
-                toggleBookmark = ::saveCurrentBookmark,
-                increaseText = { changeFontSizeFromSpen(1f) },
-                decreaseText = { changeFontSizeFromSpen(-1f) },
-                toggleQuickTheme = {
-                    activeQuickMode = 1 - activeQuickMode
-                    appearanceController.applyQuickMode(activeQuickMode)
-                },
-                addSelectionToDictionary = { useSelectedTextFromSpen(addToDictionary = true) },
-                addSelectionAsQuote = { useSelectedTextFromSpen(addToDictionary = false) },
-                interactionCompleted = ::configureReaderScreenTimeout
-            )
-        )
-        spenRemoteController = SpenRemoteController(this, ::executeSpenGesture)
         decorationController = EpubDecorationController(
             context = this,
             database = database,
@@ -147,6 +129,7 @@ class ReadiumEpubActivity : FragmentActivity() {
             }
         )
         setContentView(buildScreen())
+        observeHardwareInput()
         appearanceController.applyInitialTheme()
         configureReaderScreenTimeout()
         openWithReadium()
@@ -472,7 +455,6 @@ class ReadiumEpubActivity : FragmentActivity() {
         super.onResume()
         sessionController?.onResume()
         configureReaderScreenTimeout()
-        if (::spenRemoteController.isInitialized) spenRemoteController.connect()
         if (::topControls.isInitialized && ::bottomControls.isInitialized && ::settingsPanel.isInitialized) {
             val selectedTheme = readerSettings.theme
             val themeIndex = ReadingThemePalette.names.indexOf(selectedTheme).coerceAtLeast(0)
@@ -668,44 +650,25 @@ class ReadiumEpubActivity : FragmentActivity() {
     private fun pageAnimationsEnabled(): Boolean =
         readerSettings.pageTurnAnimations
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (!::navigator.isInitialized) return super.onKeyDown(keyCode, event)
-        val gesture = spenActionController.gestureForKeyCode(keyCode) ?: return super.onKeyDown(keyCode, event)
-        if (spenRemoteController.isConnected) return true
-        executeSpenGesture(gesture)
-        return true
-    }
-
-    private fun executeSpenGesture(gesture: SpenControlPreferences.Gesture) {
-        if (!::navigator.isInitialized) return
-        spenActionController.execute(gesture)
-    }
-
-    private fun useSelectedTextFromSpen(addToDictionary: Boolean) {
+    private fun observeHardwareInput() {
         lifecycleScope.launch {
-            val selection = navigator.currentSelection()
-            val selectedText = selection?.locator?.text?.highlight.orEmpty().trim()
-            if (selectedText.isBlank()) {
-                Toast.makeText(this@ReadiumEpubActivity, "No se puede realizar la acción porque no hay texto seleccionado", Toast.LENGTH_SHORT).show()
-                return@launch
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                hardwareInputDispatcher.actions.collect { action ->
+                    if (!::navigator.isInitialized) return@collect
+                    when (action) {
+                        ReaderHardwareAction.NEXT_PAGE -> navigateOnePage(1)
+                        ReaderHardwareAction.PREVIOUS_PAGE -> navigateOnePage(-1)
+                    }
+                }
             }
-            if (addToDictionary) launchReaderMenu(Intent(this@ReadiumEpubActivity, DictionaryActivity::class.java)
-                .putExtra(DictionaryActivity.EXTRA_DOCUMENT_IDENTIFIER, document.identifier)
-                .putExtra(DictionaryActivity.EXTRA_SELECTED_TEXT, selectedText)
-                .putExtra(DictionaryActivity.EXTRA_SELECTED_CONTEXT, selection?.locator?.text?.before.orEmpty()))
-            else selection?.locator?.let { openQuoteColorPicker(selectedText, listOf(it)) }
         }
     }
 
-    private fun changeFontSizeFromSpen(change: Float) {
-        val preferences = readerSettings.preferences
-        val size = (readerSettings.fontSizeDp + change).coerceIn(
-            ReaderSettingsRepository.MINIMUM_FONT_SIZE_DP,
-            ReaderSettingsRepository.MAXIMUM_FONT_SIZE_DP
-        )
-        readerSettings.fontSizeDp = size
-        appearanceController.submit(EpubPreferences(fontSize = size / 16.0))
-        Toast.makeText(this, "Texto: ${size.toInt()} dp", Toast.LENGTH_SHORT).show()
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val action = ReaderHardwareKeyMapper.actionFor(keyCode, event)
+            ?: return super.onKeyDown(keyCode, event)
+        hardwareInputDispatcher.dispatch(action)
+        return true
     }
 
     private fun saveCurrentBookmark() {
@@ -797,7 +760,6 @@ class ReadiumEpubActivity : FragmentActivity() {
     }
 
     override fun onPause() {
-        if (::spenRemoteController.isInitialized) spenRemoteController.disconnect()
         readerWindow.stopScreenTimeout()
         super.onPause()
     }
