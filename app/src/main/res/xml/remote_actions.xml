@@ -4,10 +4,10 @@
     actionset_label="@string/spen_actions">
 
     <action
-        id="button_click"
+        id="button_click_page_down"
         label="@string/spen_next_page"
         priority="1"
-        trigger_key="SPACE">
+        trigger_key="PAGE_DOWN">
         <preference
             name="gesture"
             value="click" />
@@ -17,10 +17,10 @@
     </action>
 
     <action
-        id="button_double_click"
+        id="button_double_click_page_up"
         label="@string/spen_previous_page"
         priority="2"
-        trigger_key="DEL">
+        trigger_key="PAGE_UP">
         <preference
             name="gesture"
             value="double_click" />
@@ -51,7 +51,7 @@
         id="swipe_left"
         label="@string/spen_previous_page"
         priority="5"
-        trigger_key="PAGE_UP">
+        trigger_key="DPAD_LEFT">
         <preference name="gesture" value="swipe_left" />
         <preference name="motion_only" value="true" />
     </action>
@@ -60,7 +60,7 @@
         id="swipe_right"
         label="@string/spen_next_page"
         priority="6"
-        trigger_key="PAGE_DOWN">
+        trigger_key="DPAD_RIGHT">
         <preference name="gesture" value="swipe_right" />
         <preference name="motion_only" value="true" />
     </action>

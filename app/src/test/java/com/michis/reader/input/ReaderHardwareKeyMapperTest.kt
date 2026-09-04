@@ -14,17 +14,17 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35])
 class ReaderHardwareKeyMapperTest {
     @Test
-    fun pageDownIdentifiesSwipeRight() {
+    fun pageDownIdentifiesButtonClick() {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_DOWN)
 
-        assertEquals(ReaderHardwareControl.SWIPE_RIGHT, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
+        assertEquals(ReaderHardwareControl.BUTTON_CLICK, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
     }
 
     @Test
-    fun pageUpIdentifiesSwipeLeft() {
+    fun pageUpIdentifiesButtonDoubleClick() {
         val event = KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_PAGE_UP)
 
-        assertEquals(ReaderHardwareControl.SWIPE_LEFT, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
+        assertEquals(ReaderHardwareControl.BUTTON_DOUBLE_CLICK, ReaderHardwareKeyMapper.controlFor(event.keyCode, event))
     }
 
     @Test
@@ -45,7 +45,7 @@ class ReaderHardwareKeyMapperTest {
 
     @Test
     fun supportedKeysAreConsumedEvenWhenEventMustNotExecute() {
-        assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_SPACE))
+        assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_DPAD_LEFT))
         assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_PAGE_DOWN))
         assertTrue(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_PLUS))
         assertFalse(ReaderHardwareKeyMapper.supports(KeyEvent.KEYCODE_VOLUME_UP))
